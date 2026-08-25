@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GRE + CPE SUNAT Pro</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="css/styles.css" />
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: { 50:'#eff6ff',100:'#dbeafe',500:'#3b82f6',600:'#2563eb',700:'#1d4ed8',800:'#1e40af',900:'#1e3a8a' },
+            accent: { 500:'#059669',600:'#047857' }
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-slate-50 text-slate-800 antialiased">
+
+  <!-- LOGIN -->
+  <div id="loginScreen" class="fixed inset-0 z-[100] bg-slate-900 flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+      <div class="text-center mb-6">
+        <div class="w-12 h-12 rounded-xl bg-primary-600 text-white font-bold text-lg flex items-center justify-center mx-auto mb-3">GS</div>
+        <h1 class="text-xl font-semibold">GRE + CPE SUNAT Pro</h1>
+        <p class="text-sm text-slate-500 mt-1">Inicia sesión con Supabase Auth</p>
+      </div>
+      <form id="formLogin" class="space-y-3">
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">Email</label>
+          <input id="loginEmail" type="email" required class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm" placeholder="tu@email.com" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">Contraseña</label>
+          <input id="loginPassword" type="password" required minlength="6" class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm" />
+        </div>
+        <p id="loginError" class="text-xs text-red-600 hidden"></p>
+        <button type="submit" id="btnLogin" class="w-full py-2.5 rounded-lg bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium">Entrar</button>
+        <button type="button" id="btnRegister" class="w-full py-2.5 rounded-lg border border-slate-300 text-sm hover:bg-slate-50">Crear cuenta</button>
+        <div class="relative my-4">
+          <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-slate-200"></div></div>
+          <div class="relative flex justify-center text-xs"><span class="bg-white px-2 text-slate-400">o continúa con</span></div>
+        </div>
+        <button type="button" id="btnGoogle" class="w-full py-2.5 rounded-lg border border-slate-300 text-sm hover:bg-slate-50 flex items-center justify-center gap-2 font-medium">
+          <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+          Google
+        </button>
+      </form>
+      <p class="text-xs text-slate-400 text-center mt-4">O usa modo local (sin cuenta) desde config.js → USE_SUPABASE = false</p>
+    </div>
+  </div>
+
+
+  <!-- SIDEBAR -->
+  <aside id="sidebar" class="fixed inset-y-0 left-0 z-40 w-64 bg-slate-900 text-white transform transition-transform duration-200 lg:translate-x-0 -translate-x-full">
+    <div class="flex items-center gap-3 px-5 py-5 border-b border-slate-700">
+      <div class="w-9 h-9 rounded-lg bg-primary-600 flex items-center justify-center font-bold text-sm">GS</div>
+      <div>
+        <div class="font-semibold text-sm leading-tight">GRE + CPE</div>
+        <div class="text-xs text-slate-400">SUNAT Pro</div>
+      </div>
+    </div>
+    <nav class="p-3 space-y-1 text-sm">
+      <button data-view="dashboard" class="nav-btn active w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-800 transition">
+        <span class="w-5 text-center">🏠</span> Inicio
+      </button>
+      <button data-view="empresas" class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-800 transition">
+        <span class="w-5 text-center">🏢</span> Empresas
+      </button>
+      <button data-view="token" class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-800 transition">
+        <span class="w-5 text-center">🔑</span> Token SUNAT
+      </button>
+      <button data-view="gre" class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-800 transition">
+        <span class="w-5 text-center">📦</span> Guías GRE
+      </button>
+      <button data-view="cpe" class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-800 transition">
+        <span class="w-5 text-center">🧾</span> Comprobantes CPE
+      </button>
+      <button data-view="visor" class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-800 transition">
+        <span class="w-5 text-center">🔍</span> Visor / Verificar
+      </button>
+    </nav>
+    <div class="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-700 text-xs text-slate-400">
+      <div id="empresaActivaSidebar" class="truncate">Sin empresa activa</div>
+    </div>
+  </aside>
+
+  <!-- OVERLAY móvil -->
+  <div id="overlay" class="fixed inset-0 bg-black/40 z-30 hidden lg:hidden"></div>
+
+  <!-- MAIN -->
+  <div class="lg:pl-64 min-h-screen">
+    <!-- Top bar -->
+    <header class="sticky top-0 z-20 bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <button id="btnMenu" class="lg:hidden p-2 rounded-lg hover:bg-slate-100">☰</button>
+        <h1 id="pageTitle" class="font-semibold text-lg">Inicio</h1>
+      </div>
+      <div class="flex items-center gap-3 text-sm">
+        <span id="badgeToken" class="hidden px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-medium">Token OK</span>
+        <span id="badgeEmpresa" class="px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 text-xs truncate max-w-[180px]">Sin empresa</span>
+        <button id="btnLogout" class="text-xs px-2.5 py-1 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 hidden">Salir</button>
+      </div>
+    </header>
+
+    <!-- CONTENT -->
+    <main class="p-4 md:p-6 max-w-7xl mx-auto">
+
+      <!-- ========== DASHBOARD ========== -->
+      <section id="view-dashboard" class="view">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+            <div class="text-slate-500 text-sm mb-1">Empresa activa</div>
+            <div id="dashEmpresa" class="font-semibold text-lg truncate">Ninguna</div>
+            <div id="dashRuc" class="text-sm text-slate-500 mt-0.5">—</div>
+          </div>
+          <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+            <div class="text-slate-500 text-sm mb-1">Estado del Token</div>
+            <div id="dashToken" class="font-semibold text-lg">No generado</div>
+            <div id="dashTokenExpira" class="text-sm text-slate-500 mt-0.5">—</div>
+          </div>
+          <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+            <div class="text-slate-500 text-sm mb-1">Empresas registradas</div>
+            <div id="dashCount" class="font-semibold text-lg">0</div>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+          <h2 class="font-semibold mb-4">Acciones rápidas</h2>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <button onclick="navigate('empresas')" class="quick-btn bg-primary-600 hover:bg-primary-700 text-white">🏢 Empresas</button>
+            <button onclick="navigate('token')" class="quick-btn bg-accent-500 hover:bg-accent-600 text-white">🔑 Generar Token</button>
+            <button onclick="navigate('gre')" class="quick-btn bg-violet-600 hover:bg-violet-700 text-white">📦 Listar GRE</button>
+            <button onclick="navigate('visor')" class="quick-btn bg-amber-500 hover:bg-amber-600 text-white">🔍 Verificar</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========== EMPRESAS ========== -->
+      <section id="view-empresas" class="view hidden">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+          <div class="relative flex-1 max-w-md">
+            <input id="buscarEmpresa" type="text" placeholder="Buscar por RUC o Nombre..." class="w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none text-sm" />
+            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">🔍</span>
+          </div>
+          <button id="btnNuevaEmpresa" class="px-4 py-2.5 rounded-lg bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium shadow-sm">
+            + Nueva Empresa
+          </button>
+        </div>
+
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead class="bg-slate-50 border-b border-slate-200">
+                <tr>
+                  <th class="text-left px-4 py-3 font-medium text-slate-600">Activa</th>
+                  <th class="text-left px-4 py-3 font-medium text-slate-600">Nombre</th>
+                  <th class="text-left px-4 py-3 font-medium text-slate-600">RUC</th>
+                  <th class="text-left px-4 py-3 font-medium text-slate-600">Ambiente</th>
+                  <th class="text-right px-4 py-3 font-medium text-slate-600">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="tablaEmpresas" class="divide-y divide-slate-100"></tbody>
+            </table>
+          </div>
+          <div id="emptyEmpresas" class="hidden p-10 text-center text-slate-500">
+            No hay empresas. Haz clic en <strong>+ Nueva Empresa</strong>.
+          </div>
+        </div>
+      </section>
+
+      <!-- ========== TOKEN ========== -->
+      <section id="view-token" class="view hidden">
+        <div class="max-w-2xl space-y-4">
+          <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+            <h2 class="font-semibold mb-1">Token oficial SUNAT (OAuth)</h2>
+            <p class="text-sm text-slate-500 mb-4">Usa las credenciales de la empresa activa (Client ID + Client Secret + Clave SOL).</p>
+            <button id="btnGenerarToken" class="px-5 py-2.5 rounded-lg bg-accent-500 hover:bg-accent-600 text-white text-sm font-medium">
+              Generar / Renovar Token
+            </button>
+          </div>
+          <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+            <div class="text-sm text-slate-500 mb-1">Token actual</div>
+            <div id="tokenValor" class="font-mono text-xs break-all bg-slate-50 p-3 rounded-lg border border-slate-200 min-h-[60px] text-slate-700">—</div>
+            <div class="mt-3 grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <div class="text-slate-500">Expira</div>
+                <div id="tokenExpira" class="font-medium">—</div>
+              </div>
+              <div>
+                <div class="text-slate-500">Última actualización</div>
+                <div id="tokenActualizado" class="font-medium">—</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========== GRE ========== -->
+      <section id="view-gre" class="view hidden">
+        <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm mb-4">
+          <h2 class="font-semibold mb-4">Listar Guías de Remisión</h2>
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1">Tipo consulta</label>
+              <select id="greTipoConsulta" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                <option value="emitidas">Emitidas</option>
+                <option value="recibidas">Recibidas</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1">Tipo GRE</label>
+              <select id="greTipo" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                <option value="remitente">Remitente</option>
+                <option value="transportista">Transportista</option>
+                <option value="evento">Por eventos</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1">Desde</label>
+              <input type="date" id="greDesde" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1">Hasta</label>
+              <input type="date" id="greHasta" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+            </div>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button id="btnListarGRE" class="px-4 py-2 rounded-lg bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium">Listar</button>
+            <button id="btnDescargarGRE" class="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium">Descargar XML/PDF</button>
+          </div>
+          <p class="text-xs text-amber-600 mt-3">Nota: La API oficial de SUNAT está orientada a emisión. El listado masivo completo suele requerir acceso al portal SOL (se implementará de forma progresiva).</p>
+        </div>
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead class="bg-slate-50 border-b">
+                <tr>
+                  <th class="px-3 py-2 text-left">Serie</th>
+                  <th class="px-3 py-2 text-left">Número</th>
+                  <th class="px-3 py-2 text-left">Fecha</th>
+                  <th class="px-3 py-2 text-left">Destinatario</th>
+                  <th class="px-3 py-2 text-left">Estado</th>
+                  <th class="px-3 py-2 text-right">Ver</th>
+                </tr>
+              </thead>
+              <tbody id="tablaGRE"></tbody>
+            </table>
+          </div>
+          <div id="emptyGRE" class="p-8 text-center text-slate-500 text-sm">Sin resultados. Ejecuta Listar con una empresa y token válidos.</div>
+        </div>
+      </section>
+
+      <!-- ========== CPE ========== -->
+      <section id="view-cpe" class="view hidden">
+        <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm mb-4">
+          <h2 class="font-semibold mb-4">Comprobantes electrónicos (CPE)</h2>
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1">Tipo</label>
+              <select id="cpeTipo" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                <option value="emitidos">Emitidos</option>
+                <option value="recibidos">Recibidos</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1">Documento</label>
+              <select id="cpeDoc" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                <option value="01">Factura</option>
+                <option value="03">Boleta</option>
+                <option value="07">Nota de crédito</option>
+                <option value="08">Nota de débito</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1">Desde</label>
+              <input type="date" id="cpeDesde" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1">Hasta</label>
+              <input type="date" id="cpeHasta" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+            </div>
+          </div>
+          <button id="btnListarCPE" class="px-4 py-2 rounded-lg bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium">Listar</button>
+        </div>
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead class="bg-slate-50 border-b">
+                <tr>
+                  <th class="px-3 py-2 text-left">Tipo</th>
+                  <th class="px-3 py-2 text-left">Serie-Número</th>
+                  <th class="px-3 py-2 text-left">Fecha</th>
+                  <th class="px-3 py-2 text-left">Cliente / Proveedor</th>
+                  <th class="px-3 py-2 text-right">Total</th>
+                  <th class="px-3 py-2 text-right">Ver</th>
+                </tr>
+              </thead>
+              <tbody id="tablaCPE"></tbody>
+            </table>
+          </div>
+          <div id="emptyCPE" class="p-8 text-center text-slate-500 text-sm">Sin resultados.</div>
+        </div>
+      </section>
+
+      <!-- ========== VISOR / VERIFICAR ========== -->
+      <section id="view-visor" class="view hidden">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <!-- Formulario de consulta individual -->
+          <div class="lg:col-span-1 bg-white rounded-xl border border-slate-200 p-5 shadow-sm h-fit">
+            <h2 class="font-semibold mb-4">Consulta individual</h2>
+            <div class="space-y-3">
+              <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">Tipo de documento</label>
+                <select id="visorTipo" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                  <option value="09">GRE Remitente</option>
+                  <option value="31">GRE Transportista</option>
+                  <option value="01">Factura</option>
+                  <option value="03">Boleta</option>
+                  <option value="07">Nota de crédito</option>
+                  <option value="08">Nota de débito</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">RUC Emisor</label>
+                <input id="visorRuc" type="text" maxlength="11" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="20100000000" />
+              </div>
+              <div class="grid grid-cols-2 gap-2">
+                <div>
+                  <label class="block text-xs font-medium text-slate-600 mb-1">Serie</label>
+                  <input id="visorSerie" type="text" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="EG01" />
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-slate-600 mb-1">Número</label>
+                  <input id="visorNumero" type="text" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="1" />
+                </div>
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">Fecha emisión (opcional)</label>
+                <input id="visorFecha" type="date" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+              </div>
+              <button id="btnVerificar" class="w-full px-4 py-2.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium">
+                Verificar / Ver comprobante
+              </button>
+            </div>
+          </div>
+
+          <!-- Vista del comprobante -->
+          <div class="lg:col-span-2 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div class="px-5 py-3 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+              <h2 class="font-semibold text-sm">Vista del comprobante</h2>
+              <div class="flex gap-2">
+                <button id="btnVisorXML" class="text-xs px-3 py-1.5 rounded-md bg-slate-200 hover:bg-slate-300 hidden">XML</button>
+                <button id="btnVisorPDF" class="text-xs px-3 py-1.5 rounded-md bg-slate-200 hover:bg-slate-300 hidden">PDF</button>
+              </div>
+            </div>
+            <div id="visorContenido" class="p-6 min-h-[420px]">
+              <div class="flex flex-col items-center justify-center h-80 text-slate-400 text-sm">
+                <div class="text-4xl mb-3">📄</div>
+                <p>Ingresa los datos del comprobante y pulsa <strong>Verificar</strong>.</p>
+                <p class="mt-1 text-xs">Aquí se mostrará el detalle para revisión individual.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- MODAL NUEVA / EDITAR EMPRESA -->
+  <div id="modalEmpresa" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-black/40" data-close-modal></div>
+    <div class="absolute inset-0 flex items-center justify-center p-4">
+      <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div class="px-5 py-4 border-b border-slate-200 flex items-center justify-between sticky top-0 bg-white">
+          <h3 id="modalEmpresaTitulo" class="font-semibold">Nueva Empresa</h3>
+          <button data-close-modal class="text-slate-400 hover:text-slate-600 text-xl leading-none">&times;</button>
+        </div>
+        <form id="formEmpresa" class="p-5 space-y-4">
+          <input type="hidden" id="empId" />
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">RUC *</label>
+            <div class="flex gap-2">
+              <input id="empRuc" type="text" maxlength="11" required class="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="20100000000" />
+              <button type="button" id="btnBuscarRuc" class="px-3 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-sm whitespace-nowrap">Buscar en SUNAT</button>
+            </div>
+            <p id="empRucMsg" class="text-xs mt-1 text-slate-500"></p>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">Nombre / Razón Social *</label>
+            <input id="empNombre" type="text" required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1">Usuario SOL *</label>
+              <input id="empUsuario" type="text" required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="MODDATOS" />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1">Clave SOL *</label>
+              <input id="empClave" type="password" required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">Client ID (API GRE)</label>
+            <input id="empClientId" type="text" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">Client Secret</label>
+            <input id="empClientSecret" type="password" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1">Ambiente</label>
+              <select id="empAmbiente" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                <option value="PRODUCCION">PRODUCCION</option>
+                <option value="PRUEBA">PRUEBA</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1">Ruta descarga</label>
+              <input id="empRuta" type="text" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="C:\GRE\" value="C:\GRE\" />
+            </div>
+          </div>
+          <div class="flex justify-end gap-2 pt-2">
+            <button type="button" data-close-modal class="px-4 py-2 rounded-lg border border-slate-300 text-sm hover:bg-slate-50">Cancelar</button>
+            <button type="submit" class="px-4 py-2 rounded-lg bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium">Guardar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST -->
+  <div id="toast" class="fixed bottom-4 right-4 z-50 hidden max-w-sm"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/config.js"></script>
+  <script src="js/supabase-client.js"></script>
+  <script src="js/storage.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
