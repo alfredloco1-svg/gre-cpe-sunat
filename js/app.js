@@ -648,29 +648,76 @@
     if (!emp) return toast('Activa una empresa primero', 'err');
 
     const tipo = $('#greTipoDoc')?.value || '09';
-    const rucEmisor = $('#greRuc')?.value.trim();
-    const serie = $('#greSerie')?.value.trim();
+    const rucEmisor = ($('#greRuc')?.value.trim() || emp.ruc || '').trim();
+    const serie = ($('#greSerie')?.value || '').trim();
     const n1 = parseInt($('#greNumDesde')?.value, 10);
     const n2 = parseInt($('#greNumHasta')?.value, 10);
-    const fecha = $('#greFecha')?.value;
+    const fechaDesde = $('#greFechaDesde')?.value;
+    const fechaHasta = $('#greFechaHasta')?.value || fechaDesde;
 
-    if (!rucEmisor || !/^\d{11}$/.test(rucEmisor)) return toast('RUC emisor inválido', 'err');
-    if (!serie) return toast('Indica la serie', 'err');
-    if (!fecha) return toast('Indica la fecha de emisión', 'err');
-    if (!n1 || !n2 || n2 < n1) return toast('Rango de números inválido', 'err');
-    if (n2 - n1 > 50) return toast('Máximo 50 guías por lote (protección)', 'err');
-
-    const items = [];
-    for (let n = n1; n <= n2; n++) {
-      items.push({ tipo, rucEmisor, serie, numero: n, fecha, monto: '0.00' });
-    }
+    if (!fechaDesde) return toast('Indica fecha desde', 'err');
+    if (!rucEmisor) return toast('RUC emisor vacío (activa una empresa)', 'err');
 
     const prog = $('#greProgreso');
     const btn = $('#btnListarGRE');
     btn.disabled = true;
-    prog.textContent = 'Obteniendo token de consulta...';
+
+    // Modo A: solo fechas → filtrar resultados previos / avisar
+    const tieneRangoNumeros = serie && !Number.isNaN(n1) && !Number.isNaN(n2) && n2 >= n1;
 
     try {
+      if (!tieneRangoNumeros) {
+        // Listar del historial en memoria filtrado por fechas (si ya validaron antes)
+        const d0 = fechaDesde;
+        const d1 = fechaHasta || fechaDesde;
+        const filtrados = (ultimoLoteGRE || []).filter((r) => {
+          const f = (r.fecha || '').slice(0, 10);
+          if (!f) return false;
+          // fechas pueden venir dd/mm/yyyy o yyyy-mm-dd
+          let iso = f;
+          if (/^\d{2}\/\d{2}\/\d{4}$/.test(f)) {
+            const [dd, mm, yyyy] = f.split('/');
+            iso = `${yyyy}-${mm}-${dd}`;
+          }
+          return iso >= d0 && iso <= d1;
+        });
+        if (filtrados.length) {
+          renderTablaGRE(filtrados);
+          prog.textContent = `Listado por fechas · ${filtrados.length} en memoria`;
+          toast(`Mostrando ${filtrados.length} guías del rango`, 'ok');
+        } else {
+          renderTablaGRE([]);
+          prog.innerHTML = 'Sin guías en memoria para ese rango. Abre <strong>Opciones avanzadas</strong>, indica serie y números, y vuelve a consultar para validar en SUNAT.';
+          toast('Indica serie + números (avanzadas) para validar en SUNAT, o un rango ya consultado', 'info');
+        }
+        return;
+      }
+
+      if (n2 - n1 > 50) return toast('Máximo 50 guías por lote', 'err');
+
+      // Expandir fechas (máx 31 días) × números
+      const days = [];
+      {
+        const a = new Date(fechaDesde + 'T12:00:00');
+        const b = new Date((fechaHasta || fechaDesde) + 'T12:00:00');
+        if (b < a) throw new Error('Fecha hasta debe ser ≥ fecha desde');
+        const cur = new Date(a);
+        while (cur <= b && days.length < 31) {
+          days.push(cur.toISOString().slice(0, 10));
+          cur.setDate(cur.getDate() + 1);
+        }
+      }
+
+      const items = [];
+      for (const fecha of days) {
+        for (let n = n1; n <= n2; n++) {
+          items.push({ tipo, rucEmisor, serie, numero: n, fecha, monto: '0.00' });
+          if (items.length >= 50) break;
+        }
+        if (items.length >= 50) break;
+      }
+
+      prog.textContent = 'Obteniendo token de consulta...';
       const tokenObj = await API.obtenerTokenConsulta(emp);
       prog.textContent = `0 / ${items.length}`;
       ultimoLoteGRE = await API.validarCpeLote({
@@ -684,7 +731,7 @@
       renderTablaGRE(ultimoLoteGRE);
       const okCount = ultimoLoteGRE.filter(r => r.ok).length;
       toast(`Lote GRE listo: ${okCount} OK de ${ultimoLoteGRE.length}`, 'ok');
-      prog.textContent = `Listo · ${okCount}/${ultimoLoteGRE.length} aceptados`;
+      prog.textContent = `Listo · ${okCount}/${ultimoLoteGRE.length} aceptados · ${fechaDesde} → ${fechaHasta || fechaDesde}`;
     } catch (ex) {
       toast(ex.message || 'Error en lote GRE', 'err');
       prog.textContent = '';
@@ -735,9 +782,27 @@
     }
     empty?.classList.add('hidden');
     $('#btnExportarSire')?.classList.remove('hidden');
+
+    const hayVentas = rows.some((r) => r.libro === 'rvie' || /RVIE/i.test(String(r.origen || '')));
+    const hayCompras = rows.some((r) => r.libro === 'rce' || /RCE/i.test(String(r.origen || '')));
+    if ($('#thSireRuc')) {
+      if (hayVentas && !hayCompras) $('#thSireRuc').textContent = 'RUC Receptor';
+      else if (hayCompras && !hayVentas) $('#thSireRuc').textContent = 'RUC Emisor';
+      else $('#thSireRuc').textContent = 'RUC Contraparte';
+    }
+    if ($('#thSireRazon')) {
+      if (hayVentas && !hayCompras) $('#thSireRazon').textContent = 'Receptor (cliente)';
+      else if (hayCompras && !hayVentas) $('#thSireRazon').textContent = 'Emisor (proveedor)';
+      else $('#thSireRazon').textContent = 'Contraparte';
+    }
+
     tbody.innerHTML = rows.map((r, idx) => {
+      const esVenta = r.libro === 'rvie' || /RVIE/i.test(String(r.origen || ''));
+      const tag = esVenta
+        ? '<span class="text-[10px] px-1.5 py-0.5 rounded bg-sky-100 text-sky-800 mr-1">Venta</span>'
+        : '<span class="text-[10px] px-1.5 py-0.5 rounded bg-violet-100 text-violet-800 mr-1">Compra</span>';
       return `<tr class="hover:bg-slate-50">
-        <td class="px-3 py-2">${escapeHtml(r.tipoNombre || r.tipo || '')}</td>
+        <td class="px-3 py-2">${tag}${escapeHtml(r.tipoNombre || r.tipo || '')}</td>
         <td class="px-3 py-2 font-medium">${escapeHtml(r.serie || '')}-${escapeHtml(String(r.numero || ''))}</td>
         <td class="px-3 py-2">${escapeHtml(r.fecha || '—')}</td>
         <td class="px-3 py-2">${escapeHtml(r.rucEmisor || '—')}</td>
@@ -748,15 +813,46 @@
         </td>
       </tr>`;
     }).join('');
-    tbody.querySelectorAll('.btn-ver-sire').forEach(btn => {
+
+    tbody.querySelectorAll('.btn-ver-sire').forEach((btn) => {
       btn.addEventListener('click', () => {
         const i = Number(btn.getAttribute('data-sire-idx'));
         const row = ultimoLoteSire[i];
         if (!row) return;
         navigate('visor');
-        renderVisor(row);
+        void renderVisor(row);
       });
     });
+  }
+
+  async function invocarSirePropuesta(emp, periodo, libro) {
+    const c = DB.client();
+    if (!c) throw new Error('Sin cliente Supabase');
+    const { data, error } = await c.functions.invoke('sire-propuesta', {
+      body: { empresa_id: emp.id, periodo, libro },
+    });
+    if (data && data.ok && Array.isArray(data.items)) {
+      return {
+        ok: true,
+        items: data.items.map((it) => ({ ...it, libro: it.libro || data.libro || libro })),
+        ticket: data.ticket,
+        total: data.total,
+      };
+    }
+    if (data && data.ticket && !data.ok) {
+      return { ok: false, ticket: data.ticket, error: data.error || 'Archivo aún no listo' };
+    }
+    if (data && data.error && !/404|not found|Function not found/i.test(String(data.error))) {
+      throw new Error(data.error);
+    }
+    if (error) {
+      const msg = error.message || String(error);
+      if (/404|not found|Function not found|Failed to send|FunctionsHttpError/i.test(msg)) {
+        throw new Error('Edge Function sire-propuesta no desplegada o no accesible');
+      }
+      throw new Error(msg);
+    }
+    return { ok: false, error: 'Sin respuesta' };
   }
 
   $('#btnSireDescargar')?.addEventListener('click', async () => {
@@ -767,79 +863,51 @@
     const mes = $('#sireMes')?.value;
     if (!anio || !mes) return toast('Selecciona año y mes', 'err');
     const periodo = anio + mes;
-    const libro = (document.querySelector('input[name="sireLibro"]:checked') || {}).value || 'rce';
-    const libroLabel = libro === 'rvie' ? 'Ventas (RVIE)' : 'Compras (RCE)';
+    const modo = (document.querySelector('input[name="sireLibro"]:checked') || {}).value || 'ambos';
+    const libros = modo === 'ambos' ? ['rce', 'rvie'] : [modo === 'rvie' ? 'rvie' : 'rce'];
 
     const prog = $('#sireProgreso');
     const btn = $('#btnSireDescargar');
     btn.disabled = true;
-    prog.textContent = `Cargando propuesta ${libroLabel} (servidor)...`;
+    ultimoLoteSire = [];
 
     try {
-      // 1) Preferir Edge Function sire-propuesta (sin CORS, secretos en servidor)
-      let usedEdge = false;
-      if (window.USE_SUPABASE && window.DB && emp.id && !String(emp.id).startsWith('e')) {
-        try {
-          const c = DB.client();
-          if (c) {
-            prog.textContent = `SIRE ${libroLabel}: token + ticket en servidor (puede tardar 1–2 min)...`;
-            const { data, error } = await c.functions.invoke('sire-propuesta', {
-              body: { empresa_id: emp.id, periodo, libro }
-            });
-            if (error && !/404|not found|Function not found|FunctionsHttpError|Failed to send/i.test(String(error.message || error))) {
-              throw new Error(error.message || String(error));
-            }
-            if (data && data.ok && Array.isArray(data.items)) {
-              ultimoLoteSire = data.items;
-              renderTablaSire(ultimoLoteSire);
-              toast(`${libroLabel}: ${data.total} comprobantes`, 'ok');
-              prog.textContent = `Listo · ${data.total} · ticket ${data.ticket || '—'} · período ${periodo}`;
-              usedEdge = true;
-            } else if (data && data.ticket && !data.ok) {
-              const msg = data.error || `Ticket ${data.ticket}: archivo aún no listo. Espera 30–60 s y pulsa de nuevo.`;
-              toast(msg, 'info');
-              // Mensaje fijo en pantalla (no se borra al terminar)
-              prog.innerHTML = `<span class="text-amber-700 font-medium">Ticket ${escapeHtml(String(data.ticket))} — archivo aún no listo.</span> Espera 30–60 s y pulsa otra vez <strong>Cargar propuesta</strong>.`;
-              usedEdge = true;
-            } else if (data && data.error && !/404|not found|Function not found/i.test(String(data.error))) {
-              throw new Error(data.error);
-            } else if (error) {
-              // functions.invoke a veces pone el body en error.context
-              const ctx = error.context;
-              let detail = error.message || String(error);
-              try {
-                if (ctx && typeof ctx.json === 'function') {
-                  const j = await ctx.json();
-                  if (j && j.error) detail = j.error;
-                }
-              } catch (_) {}
-              throw new Error(detail);
-            }
-          }
-        } catch (ex) {
-          if (!/404|not found|Function not found|Failed to send|FunctionsHttpError/i.test(String(ex.message || ex))) {
-            throw ex;
-          }
-          // Function no desplegada → fallback cliente
-        }
+      if (!(window.USE_SUPABASE && window.DB && emp.id && !String(emp.id).startsWith('e'))) {
+        throw new Error('Requiere Supabase + Edge Function sire-propuesta desplegada');
       }
 
-      if (usedEdge) return;
+      const tickets = [];
+      for (const libro of libros) {
+        const label = libro === 'rvie' ? 'Ventas (RVIE)' : 'Compras (RCE)';
+        prog.textContent = `Cargando ${label}…`;
+        let intentos = 0;
+        let res = null;
+        while (intentos < 3) {
+          intentos++;
+          res = await invocarSirePropuesta(emp, periodo, libro);
+          if (res.ok) break;
+          if (res.ticket) {
+            prog.innerHTML = `<span class="text-amber-700">Ticket ${escapeHtml(String(res.ticket))} (${label}) aún no listo. Reintento ${intentos}/3…</span>`;
+            await new Promise((r) => setTimeout(r, 25000));
+            continue;
+          }
+          throw new Error(res.error || `Error ${label}`);
+        }
+        if (!res || !res.ok) {
+          toast(`${label}: ${res?.error || 'no listo'}. Puedes reintentar.`, 'info');
+          continue;
+        }
+        tickets.push(`${label} ${res.total} (tkt ${res.ticket || '—'})`);
+        ultimoLoteSire = ultimoLoteSire.concat(res.items);
+      }
 
-      // 2) Fallback cliente (puede fallar por CORS)
-      prog.textContent = 'Obteniendo token SIRE (cliente)...';
-      const tokenObj = await API.obtenerTokenSire(emp);
-      prog.textContent = `Solicitando propuesta ${libroLabel} a SUNAT...`;
-      const { numTicket } = await API.sireSolicitarPropuesta({
-        accessToken: tokenObj.access_token,
-        periodo,
-        libro
-      });
-      prog.textContent = `Ticket ${numTicket}. Despliega la Edge Function sire-propuesta para descarga automática.`;
-      toast(
-        `Ticket ${numTicket} generado. Para ver el listado aquí, despliega: npx supabase functions deploy sire-propuesta`,
-        'info'
-      );
+      renderTablaSire(ultimoLoteSire);
+      if (ultimoLoteSire.length) {
+        toast(`Listo · ${ultimoLoteSire.length} comprobantes`, 'ok');
+        prog.textContent = `Listo · ${ultimoLoteSire.length} · ${tickets.join(' · ')} · período ${periodo}`;
+      } else {
+        prog.textContent = 'Sin comprobantes o tickets aún no listos. Pulsa de nuevo en 30 s.';
+      }
     } catch (ex) {
       toast(ex.message || 'Error SIRE', 'err');
       prog.textContent = '';
