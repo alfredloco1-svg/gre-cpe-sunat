@@ -125,6 +125,7 @@ Deno.serve(async (req) => {
       }, 502)
     }
     const accessToken = String(tokenData.access_token)
+    console.log('SIRE token OK', { ruc: emp.ruc, periodo, libro })
 
     // 2) Solicitar propuesta → ticket
     const baseSire = 'https://api-sire.sunat.gob.pe'
@@ -163,15 +164,16 @@ Deno.serve(async (req) => {
       }, 502)
     }
 
-    // 3) Poll ticket + intentar obtener archivo
-    // Endpoints de consulta de ticket varían; probamos varios y también descarga por ticket.
+    // 3) Poll ticket (máx ~40s para no superar el timeout de Edge Functions free ~60s)
+    console.log('SIRE ticket', numTicket)
     let archivoTexto = ''
     let ultimoEstado: unknown = null
-    const maxAttempts = 24 // ~2 min (5s * 24)
+    const maxAttempts = 8 // 8 * 5s = 40s
     const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
     for (let i = 0; i < maxAttempts; i++) {
       if (i > 0) await sleep(5000)
+      console.log('SIRE poll', i + 1, '/', maxAttempts)
 
       // a) Consulta estado del proceso
       const estadoUrls = [
@@ -281,17 +283,20 @@ Deno.serve(async (req) => {
     }
 
     if (!archivoTexto) {
+      console.log('SIRE archivo no listo', { numTicket, ultimoEstado })
+      // 200 con ok:false para que functions.invoke no lo trate siempre como error de red
       return json({
         ok: false,
         error:
-          'Ticket generado pero el archivo de propuesta no estuvo disponible a tiempo. ' +
-          'Revisa el mismo período en SOL → SIRE, o reintenta en 1–2 minutos.',
+          'Ticket generado pero el archivo aún no está listo (timeout Edge ~40s). ' +
+          'Pulsa de nuevo "Cargar propuesta" en 30–60 s. Ticket: ' + numTicket,
         ticket: numTicket,
         periodo,
         libro,
         estado: ultimoEstado,
-      }, 202)
+      }, 200)
     }
+    console.log('SIRE archivo OK, bytes', archivoTexto.length)
 
     // Si viene ZIP en base64/binario simple, intentar extraer texto (solo plain text)
     // Deno no tiene unzip nativo sencillo; asumimos TXT/CSV o contenido texto.
