@@ -270,34 +270,52 @@
       <!-- ========== CPE ========== -->
       <section id="view-cpe" class="view hidden">
         <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm mb-4">
-          <h2 class="font-semibold mb-4">Comprobantes electrónicos (CPE)</h2>
-          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+          <h2 class="font-semibold mb-1">Consulta y validación en lote (CPE)</h2>
+          <p class="text-xs text-slate-500 mb-4">Facturas, boletas, notas de crédito/débito · API oficial SUNAT de validez. Descarga resultados en CSV.</p>
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
             <div>
-              <label class="block text-xs font-medium text-slate-600 mb-1">Tipo</label>
-              <select id="cpeTipo" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                <option value="emitidos">Emitidos</option>
-                <option value="recibidos">Recibidos</option>
-              </select>
-            </div>
-            <div>
-              <label class="block text-xs font-medium text-slate-600 mb-1">Documento</label>
+              <label class="block text-xs font-medium text-slate-600 mb-1">Tipo documento</label>
               <select id="cpeDoc" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                <option value="01">Factura</option>
-                <option value="03">Boleta</option>
-                <option value="07">Nota de crédito</option>
-                <option value="08">Nota de débito</option>
+                <option value="01">Factura (01)</option>
+                <option value="03">Boleta (03)</option>
+                <option value="07">Nota de crédito (07)</option>
+                <option value="08">Nota de débito (08)</option>
               </select>
             </div>
             <div>
-              <label class="block text-xs font-medium text-slate-600 mb-1">Desde</label>
-              <input type="date" id="cpeDesde" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+              <label class="block text-xs font-medium text-slate-600 mb-1">RUC Emisor *</label>
+              <input id="cpeRuc" type="text" maxlength="11" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="20100000000" />
             </div>
             <div>
-              <label class="block text-xs font-medium text-slate-600 mb-1">Hasta</label>
-              <input type="date" id="cpeHasta" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+              <label class="block text-xs font-medium text-slate-600 mb-1">Serie *</label>
+              <input id="cpeSerie" type="text" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="F001" />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1">Número desde *</label>
+              <input id="cpeNumDesde" type="number" min="1" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="1" />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1">Número hasta *</label>
+              <input id="cpeNumHasta" type="number" min="1" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="10" />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1">Fecha emisión *</label>
+              <input type="date" id="cpeFecha" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1">Monto (opcional, mismo para el rango)</label>
+              <input id="cpeMonto" type="number" step="0.01" min="0" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="0.00" />
             </div>
           </div>
-          <button id="btnListarCPE" class="px-4 py-2 rounded-lg bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium">Listar</button>
+          <div class="flex flex-wrap gap-2 items-center">
+            <button id="btnValidarLoteCPE" class="px-4 py-2 rounded-lg bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium">Validar lote en SUNAT</button>
+            <button id="btnExportarCPE" class="px-4 py-2 rounded-lg border border-slate-300 text-sm hover:bg-slate-50 hidden">Descargar CSV</button>
+            <span id="cpeProgreso" class="text-xs text-slate-500"></span>
+          </div>
+          <p class="text-[11px] text-amber-700 mt-3 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+            Requiere empresa activa y Client ID/Secret con alcance de <strong>consulta de comprobantes</strong> en SOL.
+            Si el navegador bloquea SUNAT (CORS), hará falta Edge Function.
+          </p>
         </div>
         <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <div class="overflow-x-auto">
@@ -307,15 +325,15 @@
                   <th class="px-3 py-2 text-left">Tipo</th>
                   <th class="px-3 py-2 text-left">Serie-Número</th>
                   <th class="px-3 py-2 text-left">Fecha</th>
-                  <th class="px-3 py-2 text-left">Cliente / Proveedor</th>
-                  <th class="px-3 py-2 text-right">Total</th>
+                  <th class="px-3 py-2 text-left">Monto</th>
+                  <th class="px-3 py-2 text-left">Estado</th>
                   <th class="px-3 py-2 text-right">Ver</th>
                 </tr>
               </thead>
               <tbody id="tablaCPE"></tbody>
             </table>
           </div>
-          <div id="emptyCPE" class="p-8 text-center text-slate-500 text-sm">Sin resultados.</div>
+          <div id="emptyCPE" class="p-8 text-center text-slate-500 text-sm">Sin resultados. Completa el formulario y pulsa Validar lote.</div>
         </div>
       </section>
 
@@ -352,8 +370,12 @@
                 </div>
               </div>
               <div>
-                <label class="block text-xs font-medium text-slate-600 mb-1">Fecha emisión (opcional)</label>
+                <label class="block text-xs font-medium text-slate-600 mb-1">Fecha emisión *</label>
                 <input id="visorFecha" type="date" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">Monto total *</label>
+                <input id="visorMonto" type="number" step="0.01" min="0" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="0.00" />
               </div>
               <button id="btnVerificar" class="w-full px-4 py-2.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium">
                 Verificar / Ver comprobante
