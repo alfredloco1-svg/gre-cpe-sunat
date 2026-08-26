@@ -420,8 +420,11 @@
           <div>
             <label class="block text-xs font-medium text-slate-600 mb-1">RUC *</label>
             <div class="flex gap-2">
-              <input id="empRuc" type="text" maxlength="11" required class="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="20100000000" />
-              <button type="button" id="btnBuscarRuc" class="px-3 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-sm whitespace-nowrap">Buscar en SUNAT</button>
+              <input id="empRuc" type="text" maxlength="11" required inputmode="numeric" pattern="[0-9]*" class="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="20100000000" title="Enter = buscar en SUNAT" />
+              <button type="button" id="btnBuscarRuc" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#0033A0] hover:bg-[#00267a] text-white text-sm font-medium whitespace-nowrap shadow-sm transition" title="Buscar razón social en SUNAT">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+                <span>SUNAT</span>
+              </button>
             </div>
             <p id="empRucMsg" class="text-xs mt-1 text-slate-500"></p>
           </div>
