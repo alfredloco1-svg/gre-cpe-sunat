@@ -164,26 +164,29 @@ Deno.serve(async (req) => {
       }, 502)
     }
 
-    // 3) Poll ticket (máx ~40s para no superar el timeout de Edge Functions free ~60s)
+    // 3) Poll ticket con endpoints oficiales SIRE (consultaestadotickets + archivoreporte)
     console.log('SIRE ticket', numTicket)
     let archivoTexto = ''
     let ultimoEstado: unknown = null
-    const maxAttempts = 8 // 8 * 5s = 40s
+    let nomArchivoReporte = ''
+    let codTipoArchivoReporte = '0'
+    const codLibro = libro === 'rvie' ? '140000' : '080000' // códigos típicos libro; SUNAT puede devolver el real
+    const maxAttempts = 8
     const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
     for (let i = 0; i < maxAttempts; i++) {
       if (i > 0) await sleep(5000)
       console.log('SIRE poll', i + 1, '/', maxAttempts)
 
-      // a) Consulta estado del proceso
-      const estadoUrls = [
-        `${baseSire}/v1/contribuyente/migeigv/libros/rvierce/gestionprocesos/web/procesos/${encodeURIComponent(numTicket)}`,
-        `${baseSire}/v1/contribuyente/migeigv/libros/rvierce/gestionprocesosweb/procesos/${encodeURIComponent(numTicket)}`,
+      // Consultar estado del ticket (manual oficial)
+      const consultaUrls = [
+        `${baseSire}/v1/contribuyente/migeigv/libros/rvierce/gestionprocesosmasivos/web/masivo/consultaestadotickets?perIni=${periodo}&perFin=${periodo}&page=1&perPage=20&numTicket=${encodeURIComponent(numTicket)}`,
+        `${baseSire}/v1/contribuyente/migeigv/libros/rvierce/gestionprocesosmasivos/web/masivo/archivoreporte/lista?perIni=${periodo}&perFin=${periodo}&page=1&perPage=20&numTicket=${encodeURIComponent(numTicket)}`,
       ]
 
-      for (const url of estadoUrls) {
+      for (const curl of consultaUrls) {
         try {
-          const stRes = await fetch(url, {
+          const stRes = await fetch(curl, {
             method: 'GET',
             headers: {
               Authorization: `Bearer ${accessToken}`,
@@ -191,105 +194,95 @@ Deno.serve(async (req) => {
             },
           })
           const stText = await stRes.text()
+          console.log('SIRE consulta status', stRes.status, stText.slice(0, 180))
           let stData: Record<string, unknown> = {}
           try {
             stData = JSON.parse(stText)
           } catch {
-            // texto plano / archivo
             if (stRes.ok && stText.length > 80 && !stText.trim().startsWith('{')) {
               archivoTexto = stText
               break
             }
+            continue
           }
           ultimoEstado = stData
 
-          // Posibles campos de archivo / URL
-          const posible =
-            stData.archivo ||
-            stData.contenido ||
-            stData.file ||
-            stData.nomArchivo ||
-            stData.archivoReporte
-          if (typeof posible === 'string' && posible.length > 50) {
-            // base64?
-            if (/^[A-Za-z0-9+/=\s]+$/.test(posible.slice(0, 80)) && posible.length > 200) {
-              try {
-                archivoTexto = atob(posible.replace(/\s/g, ''))
-              } catch {
-                archivoTexto = posible
-              }
-            } else {
-              archivoTexto = posible
-            }
-            break
+          // Buscar registro del ticket en registros[] o estructura plana
+          const registros = (stData.registros || stData.records || stData.data || []) as Record<string, unknown>[]
+          let reg: Record<string, unknown> | null = null
+          if (Array.isArray(registros) && registros.length) {
+            reg = registros.find((r) => String(r.numTicket || r.num_ticket || '') === numTicket) || registros[0]
+          } else if (stData.numTicket || stData.codEstadoProceso) {
+            reg = stData
           }
 
-          const urlArchivo = stData.urlArchivo || stData.url || stData.downloadUrl
-          if (typeof urlArchivo === 'string' && urlArchivo.startsWith('http')) {
-            const fr = await fetch(urlArchivo, {
-              headers: { Authorization: `Bearer ${accessToken}` },
-            })
-            const ft = await fr.text()
-            if (fr.ok && ft.length > 50) {
-              archivoTexto = ft
-              break
+          if (reg) {
+            const codEst = String(reg.codEstadoProceso || reg.codEstado || reg.estado || '')
+            const desEst = String(reg.desEstadoProceso || reg.desEstado || '')
+            console.log('SIRE estado ticket', codEst, desEst)
+            // 06 = Terminado, 04 = Procesado sin errores
+            const archivoInfo = (reg.archivoReporte || reg.detalleTicket || reg) as Record<string, unknown>
+            const nom =
+              archivoInfo?.nomArchivoReporte ||
+              reg.nomArchivoReporte ||
+              reg.nomArchivo ||
+              ''
+            if (nom) nomArchivoReporte = String(nom)
+            if (archivoInfo?.codTipoArchivoReporte != null) {
+              codTipoArchivoReporte = String(archivoInfo.codTipoArchivoReporte)
             }
-          }
+            if (reg.codLibro) {
+              // preferir el del response
+            }
 
-          // b) Endpoint de descarga de archivo por ticket (variantes documentadas)
-          const dlUrls = [
-            `${baseSire}/v1/contribuyente/migeigv/libros/rvierce/gestionprocesos/web/procesos/descargararchivo/${encodeURIComponent(numTicket)}`,
-            `${baseSire}/v1/contribuyente/migeigv/libros/rvierce/gestionprocesosweb/archivo/${encodeURIComponent(numTicket)}`,
-          ]
-          for (const dl of dlUrls) {
-            try {
-              const dr = await fetch(dl, {
+            if ((codEst === '06' || codEst === '04' || /terminado|concluido/i.test(desEst)) && nomArchivoReporte) {
+              const dlUrl =
+                `${baseSire}/v1/contribuyente/migeigv/libros/rvierce/gestionprocesosmasivos/web/masivo/archivoreporte` +
+                `?nomArchivoReporte=${encodeURIComponent(nomArchivoReporte)}` +
+                `&codTipoArchivoReporte=${encodeURIComponent(codTipoArchivoReporte)}` +
+                `&codLibro=${encodeURIComponent(String(reg.codLibro || codLibro))}`
+              console.log('SIRE descargando', nomArchivoReporte)
+              const dr = await fetch(dlUrl, {
                 method: 'GET',
                 headers: {
                   Authorization: `Bearer ${accessToken}`,
-                  Accept: 'application/json, text/plain, */*',
+                  Accept: 'application/json, application/zip, text/plain, */*',
                 },
               })
               const dt = await dr.text()
-              if (!dr.ok) continue
-              // JSON con base64
-              try {
-                const dj = JSON.parse(dt)
-                const b64 = dj.archivo || dj.contenido || dj.file || dj.arcGreZip
-                if (typeof b64 === 'string' && b64.length > 50) {
-                  try {
-                    archivoTexto = atob(b64.replace(/\s/g, ''))
-                  } catch {
-                    archivoTexto = b64
+              console.log('SIRE download status', dr.status, 'len', dt.length)
+              if (dr.ok && dt.length > 50) {
+                try {
+                  const dj = JSON.parse(dt)
+                  const b64 = dj.archivo || dj.contenido || dj.file || dj.arcContent
+                  if (typeof b64 === 'string' && b64.length > 50) {
+                    try {
+                      archivoTexto = atob(b64.replace(/\s/g, ''))
+                    } catch {
+                      archivoTexto = b64
+                    }
                   }
-                  break
-                }
-              } catch {
-                if (dt.length > 80 && !dt.trim().startsWith('{')) {
+                } catch {
                   archivoTexto = dt
-                  break
                 }
               }
-            } catch {
-              /* next */
             }
           }
           if (archivoTexto) break
-        } catch {
-          /* next url */
+        } catch (e) {
+          console.log('SIRE consulta error', String(e))
         }
       }
       if (archivoTexto) break
     }
 
     if (!archivoTexto) {
-      console.log('SIRE archivo no listo', { numTicket, ultimoEstado })
-      // 200 con ok:false para que functions.invoke no lo trate siempre como error de red
+      console.log('SIRE archivo no listo', { numTicket, ultimoEstado, nomArchivoReporte })
       return json({
         ok: false,
         error:
-          'Ticket generado pero el archivo aún no está listo (timeout Edge ~40s). ' +
-          'Pulsa de nuevo "Cargar propuesta" en 30–60 s. Ticket: ' + numTicket,
+          'Ticket generado pero el archivo aún no está listo. ' +
+          'Espera 30–60 s y pulsa de nuevo "Cargar propuesta". Ticket: ' + numTicket,
         ticket: numTicket,
         periodo,
         libro,
