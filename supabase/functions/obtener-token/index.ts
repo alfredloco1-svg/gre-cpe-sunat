@@ -92,6 +92,20 @@ Deno.serve(async (req) => {
         client_id: emp.client_id,
         client_secret: emp.client_secret,
       })
+    } else if (tipo === 'sire') {
+      // Token SIRE (RCE / RVIE) – password · clientessol · scope api-sire
+      if (!emp.clave_sol || !emp.usuario_sol || !emp.ruc) {
+        return json({ error: 'Faltan RUC / Usuario SOL / Clave SOL para SIRE' }, 400)
+      }
+      tokenUrl = `${baseSeguridad}/v1/clientessol/${encodeURIComponent(emp.client_id)}/oauth2/token/`
+      form = new URLSearchParams({
+        grant_type: 'password',
+        scope: 'https://api-sire.sunat.gob.pe',
+        client_id: emp.client_id,
+        client_secret: emp.client_secret,
+        username: emp.ruc + emp.usuario_sol,
+        password: emp.clave_sol,
+      })
     } else {
       // Token emisión GRE/CPE (password · clientessol)
       if (!emp.clave_sol || !emp.usuario_sol || !emp.ruc) {
