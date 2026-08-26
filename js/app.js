@@ -796,11 +796,24 @@
               prog.textContent = `Listo · ${data.total} · ticket ${data.ticket || '—'} · período ${periodo}`;
               usedEdge = true;
             } else if (data && data.ticket && !data.ok) {
-              toast(data.error || `Ticket ${data.ticket}: archivo aún no listo. Reintenta en 1–2 min.`, 'info');
-              prog.textContent = `Ticket ${data.ticket} · reintenta o revisa SOL → SIRE`;
+              const msg = data.error || `Ticket ${data.ticket}: archivo aún no listo. Espera 30–60 s y pulsa de nuevo.`;
+              toast(msg, 'info');
+              // Mensaje fijo en pantalla (no se borra al terminar)
+              prog.innerHTML = `<span class="text-amber-700 font-medium">Ticket ${escapeHtml(String(data.ticket))} — archivo aún no listo.</span> Espera 30–60 s y pulsa otra vez <strong>Cargar propuesta</strong>.`;
               usedEdge = true;
             } else if (data && data.error && !/404|not found|Function not found/i.test(String(data.error))) {
               throw new Error(data.error);
+            } else if (error) {
+              // functions.invoke a veces pone el body en error.context
+              const ctx = error.context;
+              let detail = error.message || String(error);
+              try {
+                if (ctx && typeof ctx.json === 'function') {
+                  const j = await ctx.json();
+                  if (j && j.error) detail = j.error;
+                }
+              } catch (_) {}
+              throw new Error(detail);
             }
           }
         } catch (ex) {
