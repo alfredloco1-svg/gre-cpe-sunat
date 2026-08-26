@@ -239,6 +239,18 @@
     $('#modalEmpresa').classList.add('hidden');
   }));
 
+  // Enter en RUC = buscar SUNAT
+  $('#empRuc')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      $('#btnBuscarRuc')?.click();
+    }
+  });
+  // Solo dígitos en RUC
+  $('#empRuc')?.addEventListener('input', (e) => {
+    e.target.value = e.target.value.replace(/\D/g, '').slice(0, 11);
+  });
+
   $('#btnBuscarRuc')?.addEventListener('click', async () => {
     const ruc = $('#empRuc').value.trim();
     if (!/^\d{11}$/.test(ruc)) {
