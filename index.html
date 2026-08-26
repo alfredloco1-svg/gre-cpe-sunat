@@ -218,46 +218,61 @@
       <!-- ========== GRE ========== -->
       <section id="view-gre" class="view hidden">
         <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm mb-4">
-          <h2 class="font-semibold mb-1">Consulta y validación en lote (GRE)</h2>
-          <p class="text-xs text-slate-500 mb-4">Guías de Remisión Remitente (09) y Transportista (31) · API oficial SUNAT de validez. Rango de números + visualización en tabla y Visor.</p>
-          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
+          <h2 class="font-semibold mb-1">Guías de Remisión (GRE)</h2>
+          <p class="text-xs text-slate-500 mb-4">
+            Consulta por <strong>rango de fechas</strong>. El RUC se toma de la empresa activa.
+            Serie y correlativos son opcionales (solo si quieres validar un tramo concreto en SUNAT).
+          </p>
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
             <div>
-              <label class="block text-xs font-medium text-slate-600 mb-1">Tipo GRE *</label>
+              <label class="block text-xs font-medium text-slate-600 mb-1">Tipo GRE</label>
               <select id="greTipoDoc" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
                 <option value="09">GRE Remitente (09)</option>
                 <option value="31">GRE Transportista (31)</option>
               </select>
             </div>
             <div>
-              <label class="block text-xs font-medium text-slate-600 mb-1">RUC Emisor *</label>
-              <input id="greRuc" type="text" maxlength="11" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="20100000000" />
+              <label class="block text-xs font-medium text-slate-600 mb-1">Fecha desde *</label>
+              <input type="date" id="greFechaDesde" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
             </div>
             <div>
-              <label class="block text-xs font-medium text-slate-600 mb-1">Serie *</label>
-              <input id="greSerie" type="text" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="T001 / EG01" />
+              <label class="block text-xs font-medium text-slate-600 mb-1">Fecha hasta *</label>
+              <input type="date" id="greFechaHasta" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
             </div>
-            <div>
-              <label class="block text-xs font-medium text-slate-600 mb-1">Número desde *</label>
-              <input id="greNumDesde" type="number" min="1" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="1" />
-            </div>
-            <div>
-              <label class="block text-xs font-medium text-slate-600 mb-1">Número hasta *</label>
-              <input id="greNumHasta" type="number" min="1" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="10" />
-            </div>
-            <div>
-              <label class="block text-xs font-medium text-slate-600 mb-1">Fecha emisión *</label>
-              <input type="date" id="greFecha" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+            <div class="flex items-end">
+              <button id="btnListarGRE" class="w-full px-4 py-2 rounded-lg bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium">Consultar por fechas</button>
             </div>
           </div>
-          <div class="flex flex-wrap gap-2 items-center">
-            <button id="btnListarGRE" class="px-4 py-2 rounded-lg bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium">Validar lote en SUNAT</button>
+          <details class="mb-3 rounded-lg border border-slate-200 bg-slate-50">
+            <summary class="cursor-pointer px-3 py-2 text-xs font-medium text-slate-700 select-none">Opciones avanzadas (serie / números / RUC)</summary>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 p-3 border-t border-slate-200">
+              <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">RUC Emisor</label>
+                <input id="greRuc" type="text" maxlength="11" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Empresa activa" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">Serie</label>
+                <input id="greSerie" type="text" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="T001 / EG01" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">Número desde</label>
+                <input id="greNumDesde" type="number" min="1" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="1" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">Número hasta</label>
+                <input id="greNumHasta" type="number" min="1" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="50" />
+              </div>
+            </div>
+            <p class="text-[11px] text-slate-500 px-3 pb-2">Si indicas serie + desde/hasta, se valida ese tramo día a día entre las fechas (máx. 50 consultas).</p>
+          </details>
+          <div class="flex flex-wrap gap-2 items-center mb-2">
             <button id="btnExportarGRE" class="px-4 py-2 rounded-lg border border-slate-300 text-sm hover:bg-slate-50 hidden">Descargar CSV</button>
             <button id="btnDescargarGRE" class="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium hidden">Descargar XML/PDF</button>
             <span id="greProgreso" class="text-xs text-slate-500"></span>
           </div>
-          <p class="text-[11px] text-amber-700 mt-3 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
-            La API oficial de SUNAT no ofrece listado por fechas; solo validación individual/lote por serie-número.
-            Usa el RUC de la empresa activa (o el emisor si son recibidas). Máximo 50 por lote. Requiere Client ID/Secret con alcance de consulta.
+          <p class="text-[11px] text-slate-600 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">
+            Con solo fechas se listan guías ya consultadas/guardadas en el periodo.
+            Para validar en SUNAT en vivo, abre <em>Opciones avanzadas</em> y completa serie + números.
           </p>
         </div>
         <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -360,12 +375,16 @@
           </p>
           <div class="flex flex-wrap gap-2 mb-4">
             <label class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 cursor-pointer hover:bg-slate-50">
-              <input type="radio" name="sireLibro" value="rce" checked class="accent-indigo-600" />
-              <span class="text-sm font-medium">Compras (RCE) · recibidos</span>
+              <input type="radio" name="sireLibro" value="ambos" checked class="accent-indigo-600" />
+              <span class="text-sm font-medium">Ambos (Compras + Ventas)</span>
+            </label>
+            <label class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 cursor-pointer hover:bg-slate-50">
+              <input type="radio" name="sireLibro" value="rce" class="accent-indigo-600" />
+              <span class="text-sm font-medium">Solo Compras (RCE)</span>
             </label>
             <label class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 cursor-pointer hover:bg-slate-50">
               <input type="radio" name="sireLibro" value="rvie" class="accent-indigo-600" />
-              <span class="text-sm font-medium">Ventas (RVIE) · emitidos</span>
+              <span class="text-sm font-medium">Solo Ventas (RVIE)</span>
             </label>
           </div>
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
@@ -413,8 +432,8 @@
                   <th class="px-3 py-2 text-left">Tipo</th>
                   <th class="px-3 py-2 text-left">Serie-Número</th>
                   <th class="px-3 py-2 text-left">Fecha</th>
-                  <th class="px-3 py-2 text-left">RUC Emisor</th>
-                  <th class="px-3 py-2 text-left">Razón social</th>
+                  <th class="px-3 py-2 text-left" id="thSireRuc">RUC Contraparte</th>
+                  <th class="px-3 py-2 text-left" id="thSireRazon">Contraparte</th>
                   <th class="px-3 py-2 text-left">Monto</th>
                   <th class="px-3 py-2 text-right">Ver</th>
                 </tr>
