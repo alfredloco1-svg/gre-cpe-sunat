@@ -14,10 +14,46 @@ const API = {
     };
   },
 
+  /**
+   * Genera token SUNAT.
+   * Preferencia: Edge Function (credenciales no salen del servidor).
+   * Fallback: llamada directa desde el navegador (menos seguro).
+   */
   async obtenerToken(empresa) {
+    // 1) Intentar Edge Function (recomendado)
+    if (window.USE_SUPABASE && window.DB && empresa.id && !String(empresa.id).startsWith('e')) {
+      try {
+        const c = DB.client();
+        if (c) {
+          const { data, error } = await c.functions.invoke('obtener-token', {
+            body: { empresa_id: empresa.id }
+          });
+          if (!error && data && data.access_token) {
+            return {
+              access_token: data.access_token,
+              expires_at: data.expires_at
+                ? new Date(data.expires_at).getTime()
+                : Date.now() + (Number(data.expires_in) || 3600) * 1000,
+              updated_at: Date.now()
+            };
+          }
+          // Si la function no está desplegada (404), cae al fallback
+          if (error && !/404|not found|FunctionsRelayError/i.test(String(error.message || error))) {
+            throw new Error(data?.error || error.message || 'Error en Edge Function');
+          }
+        }
+      } catch (ex) {
+        // Solo re-lanzar si no es "function missing"
+        if (ex.message && !/404|not found|Failed to send|FunctionsHttpError/i.test(ex.message)) {
+          // seguir a fallback solo si parece que no hay function
+        }
+      }
+    }
+
+    // 2) Fallback cliente (menos seguro: secretos viajan por el navegador)
     const { ruc, usuario, clave, clientId, clientSecret, ambiente } = empresa;
     if (!ruc || !usuario || !clave || !clientId || !clientSecret) {
-      throw new Error('Faltan credenciales (RUC, Usuario SOL, Clave, Client ID o Secret)');
+      throw new Error('Faltan credenciales (RUC, Usuario SOL, Clave, Client ID o Secret). Si usas Edge Function, verifica que estén guardadas en Supabase.');
     }
     const base = ambiente === 'PRUEBA'
       ? 'https://api-seguridad-test.sunat.gob.pe'

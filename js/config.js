@@ -7,3 +7,6 @@ window.SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXB
 
 // true = usa Supabase | false = solo LocalStorage (modo offline/demo)
 window.USE_SUPABASE = true;
+
+// La autorización de usuarios se controla SOLO en Supabase
+// (Authentication → Settings + invitaciones). No se guardan correos en el frontend.

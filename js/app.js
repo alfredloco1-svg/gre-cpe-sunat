@@ -52,6 +52,9 @@
   }
 
   // ---------- Auth ----------
+  // Autorización de usuarios se controla en Supabase (invitaciones + sign-ups desactivado).
+  // No se guardan correos en el frontend.
+
   async function checkAuth() {
     if (!window.USE_SUPABASE) {
       $('#loginScreen')?.classList.add('hidden');
@@ -118,7 +121,6 @@
     }
   });
 
-  
   $('#btnGoogle')?.addEventListener('click', async () => {
     const err = $('#loginError');
     err.classList.add('hidden');
@@ -213,9 +215,12 @@
       $('#empRuc').value = e.ruc;
       $('#empNombre').value = e.nombre;
       $('#empUsuario').value = e.usuario || '';
-      $('#empClave').value = e.clave || '';
+      // Seguridad: no rellenar secretos en el formulario (dejar vacío = no cambiar)
+      $('#empClave').value = '';
+      $('#empClave').placeholder = e.clave ? '•••••••• (sin cambios si vacío)' : '';
       $('#empClientId').value = e.clientId || '';
-      $('#empClientSecret').value = e.clientSecret || '';
+      $('#empClientSecret').value = '';
+      $('#empClientSecret').placeholder = e.clientSecret ? '•••••••• (sin cambios si vacío)' : '';
       $('#empAmbiente').value = e.ambiente || 'PRODUCCION';
       $('#empRuta').value = e.ruta || 'C:\\GRE\\';
     } else {
@@ -269,6 +274,10 @@
     };
     if (!/^\d{11}$/.test(emp.ruc)) {
       toast('RUC inválido', 'err');
+      return;
+    }
+    if (!emp.id && !emp.clave) {
+      toast('Clave SOL obligatoria al crear empresa', 'err');
       return;
     }
     try {
@@ -328,7 +337,12 @@
       $('#tokenActualizado').textContent = '—';
       return;
     }
-    $('#tokenValor').textContent = t.access_token;
+    // Seguridad: no mostrar el token completo en pantalla
+    const tok = t.access_token || '';
+    $('#tokenValor').textContent = tok.length > 16
+      ? tok.slice(0, 8) + '…' + tok.slice(-6) + '  (' + tok.length + ' chars)'
+      : '••••••••';
+    $('#tokenValor').title = 'Token oculto por seguridad. Úsalo solo vía API de la app.';
     $('#tokenExpira').textContent = new Date(t.expires_at).toLocaleString('es-PE');
     $('#tokenActualizado').textContent = new Date(t.updated_at).toLocaleString('es-PE');
   }

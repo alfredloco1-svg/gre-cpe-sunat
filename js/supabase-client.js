@@ -85,21 +85,29 @@ const DB = {
     const user = await this.getUser();
     if (!user) throw new Error('Debes iniciar sesión');
 
+    const isUpdate = emp.id && !String(emp.id).startsWith('e');
+
+    // Seguridad: en edición, secretos vacíos = NO sobrescribir (mantener valor en BD)
     const row = {
       user_id: user.id,
       ruc: emp.ruc,
       nombre: emp.nombre,
       usuario_sol: emp.usuario,
-      clave_sol: emp.clave,
       client_id: emp.clientId || '',
-      client_secret: emp.clientSecret || '',
       ambiente: emp.ambiente || 'PRODUCCION',
       ruta_descarga: emp.ruta || 'C:\\GRE\\',
       activa: !!emp.activa
     };
 
-    if (emp.id && !String(emp.id).startsWith('e')) {
-      // update
+    if (emp.clave) row.clave_sol = emp.clave;
+    if (emp.clientSecret) row.client_secret = emp.clientSecret;
+
+    if (!isUpdate) {
+      row.clave_sol = emp.clave || '';
+      row.client_secret = emp.clientSecret || '';
+    }
+
+    if (isUpdate) {
       const { data, error } = await c
         .from('empresas')
         .update(row)
@@ -109,7 +117,6 @@ const DB = {
       if (error) throw error;
       return mapEmpresaFromDb(data);
     } else {
-      // insert
       const { data, error } = await c
         .from('empresas')
         .insert(row)
