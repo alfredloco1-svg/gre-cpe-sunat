@@ -1,7 +1,7 @@
 // Cliente Supabase + capa de datos (empresas / tokens)
 // Requiere: @supabase/supabase-js (CDN) y config.js
 
-let supabase = null;
+let sbClient = null;
 
 function initSupabase() {
   if (!window.USE_SUPABASE) return null;
@@ -13,14 +13,14 @@ function initSupabase() {
     console.error('Falta el script CDN de @supabase/supabase-js');
     return null;
   }
-  supabase = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
-  return supabase;
+  sbClient = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+  return sbClient;
 }
 
 const DB = {
   client() {
-    if (!supabase) initSupabase();
-    return supabase;
+    if (!sbClient) initSupabase();
+    return sbClient;
   },
 
   async getSession() {
