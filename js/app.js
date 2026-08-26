@@ -9,6 +9,7 @@
     token: 'Token SUNAT',
     gre: 'Guías de Remisión',
     cpe: 'Comprobantes CPE',
+    sire: 'Compras SIRE (Recibidos)',
     visor: 'Visor / Verificar'
   };
 
@@ -23,6 +24,16 @@
     if (view === 'empresas') renderEmpresas();
     if (view === 'dashboard') renderDashboard();
     if (view === 'token') renderToken();
+    if (view === 'gre' || view === 'cpe') {
+      // Prefill RUC de la empresa activa (si el campo está vacío)
+      Storage.getActiva().then(emp => {
+        if (!emp || !emp.ruc) return;
+        const greRuc = $('#greRuc');
+        const cpeRuc = $('#cpeRuc');
+        if (greRuc && !greRuc.value) greRuc.value = emp.ruc;
+        if (cpeRuc && !cpeRuc.value) cpeRuc.value = emp.ruc;
+      });
+    }
   }
   window.navigate = navigate;
 
@@ -396,25 +407,58 @@
 
   function renderVisor(data) {
     const cont = $('#visorContenido');
-    const rows = Object.entries(data.detalle || {})
-      .map(([k, v]) => `<div class="visor-row"><span class="visor-label">${escapeHtml(k)}</span><span class="visor-value">${escapeHtml(String(v))}</span></div>`)
+    if (!cont) return;
+
+    // Vista previa orientada a contador: cabecera clara + grilla de datos + observaciones
+    const det = data.detalle || {};
+    const entries = Object.entries(det).length
+      ? Object.entries(det)
+      : [
+          ['Tipo', data.tipoNombre || data.tipo || '—'],
+          ['RUC Emisor', data.rucEmisor || '—'],
+          ['Serie-Número', `${data.serie || ''}-${data.numero || ''}`],
+          ['Fecha emisión', data.fecha || '—'],
+          ['Monto', data.monto || '—'],
+          ['Estado', data.estado || '—'],
+          ['Razón social', data.razonSocial || '—']
+        ];
+
+    const rows = entries
+      .map(([k, v]) => `<div class="visor-row"><span class="visor-label">${escapeHtml(k)}</span><span class="visor-value">${escapeHtml(String(v ?? '—'))}</span></div>`)
       .join('');
+
     const badge = data.ok
       ? 'bg-emerald-100 text-emerald-800'
-      : (data.estado === 'ERROR' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800');
+      : (data.estado === 'ERROR' || data.estado === 'NO EXISTE'
+          ? 'bg-red-100 text-red-800'
+          : 'bg-amber-100 text-amber-800');
+
+    const obs = Array.isArray(data.observaciones) && data.observaciones.length
+      ? `<div class="mt-3 text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+           <strong>Observaciones:</strong> ${escapeHtml(data.observaciones.join('; '))}
+         </div>`
+      : '';
+
     cont.innerHTML = `
       <div class="visor-card mb-4">
-        <div class="flex items-start justify-between mb-3">
+        <div class="flex items-start justify-between mb-3 gap-3">
           <div>
             <div class="text-xs text-slate-500 uppercase tracking-wide">${escapeHtml(data.tipoNombre || 'Comprobante')}</div>
-            <div class="font-semibold text-lg">${escapeHtml(data.serie)}-${escapeHtml(String(data.numero))}</div>
+            <div class="font-semibold text-lg tracking-tight">${escapeHtml(data.serie || '')}-${escapeHtml(String(data.numero || ''))}</div>
+            ${data.razonSocial ? `<div class="text-sm text-slate-600 mt-0.5">${escapeHtml(data.razonSocial)}</div>` : ''}
           </div>
-          <span class="text-xs px-2.5 py-1 rounded-full ${badge}">${escapeHtml(String(data.estado || ''))}</span>
+          <span class="text-xs px-2.5 py-1 rounded-full shrink-0 ${badge}">${escapeHtml(String(data.estado || ''))}</span>
         </div>
-        ${rows}
+        <div class="border-t border-slate-100 pt-3 space-y-1">
+          ${rows}
+        </div>
+        ${obs}
       </div>
       <p class="text-sm text-slate-600">${escapeHtml(data.mensaje || '')}</p>
-      <p class="text-xs text-slate-400 mt-4">Consulta de validez vía API SUNAT. La descarga del XML original del emisor puede requerir servicio adicional o archivo propio.</p>`;
+      <p class="text-xs text-slate-400 mt-3">
+        Vista previa para trabajo contable. Origen: ${escapeHtml(data.origen || data.detalle?.Origen || 'API SUNAT / SIRE')}.
+        XML/PDF oficial del emisor puede requerir descarga adicional desde SOL o servicio del emisor.
+      </p>`;
     $('#btnVisorXML')?.classList.add('hidden');
     $('#btnVisorPDF')?.classList.add('hidden');
   }
@@ -558,16 +602,260 @@
     }
   }
 
+  // ---------- GRE lote (misma API de validez que CPE) ----------
+  let ultimoLoteGRE = [];
+
+  function renderTablaGRE(rows) {
+    const tbody = $('#tablaGRE');
+    const empty = $('#emptyGRE');
+    if (!tbody) return;
+    if (!rows.length) {
+      tbody.innerHTML = '';
+      empty?.classList.remove('hidden');
+      $('#btnExportarGRE')?.classList.add('hidden');
+      return;
+    }
+    empty?.classList.add('hidden');
+    $('#btnExportarGRE')?.classList.remove('hidden');
+    tbody.innerHTML = rows.map((r, idx) => {
+      const badge = r.ok
+        ? 'bg-emerald-100 text-emerald-700'
+        : (r.estado === 'ERROR' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-800');
+      return `<tr class="hover:bg-slate-50">
+        <td class="px-3 py-2">${escapeHtml(r.tipoNombre || r.tipo || '')}</td>
+        <td class="px-3 py-2 font-medium">${escapeHtml(r.serie)}-${escapeHtml(String(r.numero))}</td>
+        <td class="px-3 py-2">${escapeHtml(r.fecha || '—')}</td>
+        <td class="px-3 py-2">${escapeHtml(r.rucEmisor || '—')}</td>
+        <td class="px-3 py-2"><span class="text-xs px-2 py-0.5 rounded-full ${badge}">${escapeHtml(String(r.estado || ''))}</span></td>
+        <td class="px-3 py-2 text-right">
+          <button type="button" data-gre-idx="${idx}" class="btn-ver-gre text-xs text-primary-600 hover:underline">Ver</button>
+        </td>
+      </tr>`;
+    }).join('');
+    tbody.querySelectorAll('.btn-ver-gre').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const i = Number(btn.getAttribute('data-gre-idx'));
+        const row = ultimoLoteGRE[i];
+        if (!row) return;
+        navigate('visor');
+        renderVisor(row);
+      });
+    });
+  }
+
   $('#btnListarGRE')?.addEventListener('click', async () => {
-    if (!(await Storage.getActiva())) return toast('Activa una empresa primero', 'err');
-    toast('Listado GRE: se conectará en el siguiente paso', 'info');
+    const emp = await Storage.getActiva();
+    if (!emp) return toast('Activa una empresa primero', 'err');
+
+    const tipo = $('#greTipoDoc')?.value || '09';
+    const rucEmisor = $('#greRuc')?.value.trim();
+    const serie = $('#greSerie')?.value.trim();
+    const n1 = parseInt($('#greNumDesde')?.value, 10);
+    const n2 = parseInt($('#greNumHasta')?.value, 10);
+    const fecha = $('#greFecha')?.value;
+
+    if (!rucEmisor || !/^\d{11}$/.test(rucEmisor)) return toast('RUC emisor inválido', 'err');
+    if (!serie) return toast('Indica la serie', 'err');
+    if (!fecha) return toast('Indica la fecha de emisión', 'err');
+    if (!n1 || !n2 || n2 < n1) return toast('Rango de números inválido', 'err');
+    if (n2 - n1 > 50) return toast('Máximo 50 guías por lote (protección)', 'err');
+
+    const items = [];
+    for (let n = n1; n <= n2; n++) {
+      items.push({ tipo, rucEmisor, serie, numero: n, fecha, monto: '0.00' });
+    }
+
+    const prog = $('#greProgreso');
+    const btn = $('#btnListarGRE');
+    btn.disabled = true;
+    prog.textContent = 'Obteniendo token de consulta...';
+
+    try {
+      const tokenObj = await API.obtenerTokenConsulta(emp);
+      prog.textContent = `0 / ${items.length}`;
+      ultimoLoteGRE = await API.validarCpeLote({
+        empresa: emp,
+        accessToken: tokenObj.access_token,
+        items,
+        onProgress: (done, total) => {
+          prog.textContent = `${done} / ${total}`;
+        }
+      });
+      renderTablaGRE(ultimoLoteGRE);
+      const okCount = ultimoLoteGRE.filter(r => r.ok).length;
+      toast(`Lote GRE listo: ${okCount} OK de ${ultimoLoteGRE.length}`, 'ok');
+      prog.textContent = `Listo · ${okCount}/${ultimoLoteGRE.length} aceptados`;
+    } catch (ex) {
+      toast(ex.message || 'Error en lote GRE', 'err');
+      prog.textContent = '';
+    } finally {
+      btn.disabled = false;
+    }
   });
-  $('#btnDescargarGRE')?.addEventListener('click', () => toast('Descarga masiva: próximo paso', 'info'));
-  // Listar CPE reemplazado por validación en lote (btnValidarLoteCPE)
+
+  $('#btnExportarGRE')?.addEventListener('click', () => {
+    if (!ultimoLoteGRE.length) return toast('No hay resultados para exportar', 'err');
+    const csv = API.resultadosACsv(ultimoLoteGRE);
+    const stamp = new Date().toISOString().slice(0, 10);
+    API.descargarTexto(`gre-validacion-${stamp}.csv`, csv);
+    toast('CSV descargado', 'ok');
+  });
+
+  $('#btnDescargarGRE')?.addEventListener('click', () => {
+    toast('Descarga XML/PDF masiva: requiere endpoint adicional de SUNAT (próxima fase). Por ahora usa el Visor o CSV.', 'info');
+  });
+
+  // ---------- SIRE Compras (recibidos) ----------
+  let ultimoLoteSire = [];
+
+  function initSireAnios() {
+    const sel = $('#sireAnio');
+    if (!sel || sel.options.length) return;
+    const y = new Date().getFullYear();
+    for (let i = 0; i < 5; i++) {
+      const opt = document.createElement('option');
+      opt.value = String(y - i);
+      opt.textContent = String(y - i);
+      sel.appendChild(opt);
+    }
+    // Mes actual por defecto
+    const m = String(new Date().getMonth() + 1).padStart(2, '0');
+    if ($('#sireMes')) $('#sireMes').value = m;
+  }
+
+  function renderTablaSire(rows) {
+    const tbody = $('#tablaSire');
+    const empty = $('#emptySire');
+    if (!tbody) return;
+    if (!rows.length) {
+      tbody.innerHTML = '';
+      empty?.classList.remove('hidden');
+      $('#btnExportarSire')?.classList.add('hidden');
+      return;
+    }
+    empty?.classList.add('hidden');
+    $('#btnExportarSire')?.classList.remove('hidden');
+    tbody.innerHTML = rows.map((r, idx) => {
+      return `<tr class="hover:bg-slate-50">
+        <td class="px-3 py-2">${escapeHtml(r.tipoNombre || r.tipo || '')}</td>
+        <td class="px-3 py-2 font-medium">${escapeHtml(r.serie || '')}-${escapeHtml(String(r.numero || ''))}</td>
+        <td class="px-3 py-2">${escapeHtml(r.fecha || '—')}</td>
+        <td class="px-3 py-2">${escapeHtml(r.rucEmisor || '—')}</td>
+        <td class="px-3 py-2 max-w-[180px] truncate" title="${escapeHtml(r.razonSocial || '')}">${escapeHtml(r.razonSocial || '—')}</td>
+        <td class="px-3 py-2">${escapeHtml(r.monto || '—')}</td>
+        <td class="px-3 py-2 text-right">
+          <button type="button" data-sire-idx="${idx}" class="btn-ver-sire text-xs text-primary-600 hover:underline">Ver</button>
+        </td>
+      </tr>`;
+    }).join('');
+    tbody.querySelectorAll('.btn-ver-sire').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const i = Number(btn.getAttribute('data-sire-idx'));
+        const row = ultimoLoteSire[i];
+        if (!row) return;
+        navigate('visor');
+        renderVisor(row);
+      });
+    });
+  }
+
+  $('#btnSireDescargar')?.addEventListener('click', async () => {
+    const emp = await Storage.getActiva();
+    if (!emp) return toast('Activa una empresa primero', 'err');
+
+    const anio = $('#sireAnio')?.value;
+    const mes = $('#sireMes')?.value;
+    if (!anio || !mes) return toast('Selecciona año y mes', 'err');
+    const periodo = anio + mes;
+
+    const prog = $('#sireProgreso');
+    const btn = $('#btnSireDescargar');
+    btn.disabled = true;
+    prog.textContent = 'Obteniendo token SIRE...';
+
+    try {
+      const libro = (document.querySelector('input[name="sireLibro"]:checked') || {}).value || 'rce';
+      const libroLabel = libro === 'rvie' ? 'Ventas (RVIE)' : 'Compras (RCE)';
+      const tokenObj = await API.obtenerTokenSire(emp);
+      prog.textContent = `Solicitando propuesta ${libroLabel} a SUNAT...`;
+      const { numTicket } = await API.sireSolicitarPropuesta({
+        accessToken: tokenObj.access_token,
+        periodo,
+        libro
+      });
+      prog.textContent = `Ticket ${numTicket}. Esperando archivo (puede tardar 10–60 s)...`;
+
+      // Polling simple del ticket (máx ~90 s)
+      let archivoTexto = null;
+      for (let i = 0; i < 18; i++) {
+        await new Promise(r => setTimeout(r, 5000));
+        prog.textContent = `Consultando ticket ${numTicket}… (${(i + 1) * 5}s)`;
+        try {
+          const st = await API.sireConsultarTicket({
+            accessToken: tokenObj.access_token,
+            numTicket
+          });
+          // Si la respuesta trae contenido o URL de archivo, intentar usarlo
+          const d = st.data || {};
+          if (d.archivo || d.contenido || d.file || d.urlArchivo) {
+            archivoTexto = d.archivo || d.contenido || d.file || '';
+            if (d.urlArchivo && !archivoTexto) {
+              const fr = await fetch(d.urlArchivo, {
+                headers: { Authorization: `Bearer ${tokenObj.access_token}` }
+              });
+              archivoTexto = await fr.text();
+            }
+            break;
+          }
+          // Algunos endpoints devuelven el archivo directamente cuando está listo
+          if (st.text && st.text.length > 200 && !st.text.trim().startsWith('{')) {
+            archivoTexto = st.text;
+            break;
+          }
+          if (d.codEstado === '06' || d.estado === 'TERMINADO' || d.desEstado === 'Terminado') {
+            // Ticket listo pero sin cuerpo: avisar al usuario
+            prog.textContent = 'Ticket terminado. Descarga el archivo desde el portal SOL si no aparece aquí.';
+            break;
+          }
+        } catch (_) { /* seguir intentando */ }
+      }
+
+      if (archivoTexto && archivoTexto.length > 50) {
+        ultimoLoteSire = API.parsearPropuestaRce(archivoTexto);
+        renderTablaSire(ultimoLoteSire);
+        toast(`Propuesta cargada: ${ultimoLoteSire.length} comprobantes`, 'ok');
+        prog.textContent = `Listo · ${ultimoLoteSire.length} comprobantes del período ${periodo}`;
+      } else {
+        toast(
+          `Ticket generado: ${numTicket}. El archivo aún no está disponible por CORS o el endpoint de descarga. ` +
+          'Puedes ver el mismo listado en SOL → SIRE → RCE → Propuesta del período.',
+          'info'
+        );
+        prog.textContent = `Ticket ${numTicket} · Revisa en portal SOL o reintenta en unos minutos`;
+      }
+    } catch (ex) {
+      toast(ex.message || 'Error SIRE', 'err');
+      prog.textContent = '';
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  $('#btnExportarSire')?.addEventListener('click', () => {
+    if (!ultimoLoteSire.length) return toast('No hay resultados para exportar', 'err');
+    const csv = API.resultadosACsv(ultimoLoteSire);
+    const stamp = new Date().toISOString().slice(0, 10);
+    API.descargarTexto(`sire-compras-${stamp}.csv`, csv);
+    toast('CSV descargado', 'ok');
+  });
+
+  // Inicializar años al cargar
+  initSireAnios();
 
   async function boot() {
     await updateHeader();
     await renderDashboard();
+    initSireAnios();
     navigate('dashboard');
   }
 

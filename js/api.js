@@ -383,6 +383,189 @@ const API = {
     a.download = filename;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  },
+
+  /**
+   * Token SIRE (scope api-sire) para descargar propuesta RCE / compras recibidas
+   */
+  async obtenerTokenSire(empresa) {
+    if (window.USE_SUPABASE && window.DB && empresa.id && !String(empresa.id).startsWith('e')) {
+      try {
+        const c = DB.client();
+        if (c) {
+          const { data, error } = await c.functions.invoke('obtener-token', {
+            body: { empresa_id: empresa.id, tipo: 'sire' }
+          });
+          if (!error && data && data.access_token) {
+            return {
+              access_token: data.access_token,
+              expires_at: data.expires_at
+                ? new Date(data.expires_at).getTime()
+                : Date.now() + (Number(data.expires_in) || 3600) * 1000,
+              updated_at: Date.now()
+            };
+          }
+          if (data && data.error) {
+            if (!/404|not found|Failed to send|FunctionsHttpError|Function not found/i.test(String(data.error))) {
+              throw new Error(data.error);
+            }
+          }
+        }
+      } catch (ex) {
+        if (ex.message && !/404|not found|Failed to send|FunctionsHttpError|Function not found/i.test(ex.message)) {
+          throw ex;
+        }
+      }
+    }
+
+    // Fallback cliente
+    const { ruc, usuario, clave, clientId, clientSecret, ambiente } = empresa;
+    if (!ruc || !usuario || !clave || !clientId || !clientSecret) {
+      throw new Error('Faltan credenciales SOL / Client ID-Secret para SIRE.');
+    }
+    const base = ambiente === 'PRUEBA'
+      ? 'https://api-seguridad-test.sunat.gob.pe'
+      : 'https://api-seguridad.sunat.gob.pe';
+    const url = `${base}/v1/clientessol/${encodeURIComponent(clientId)}/oauth2/token/`;
+    const body = new URLSearchParams({
+      grant_type: 'password',
+      scope: 'https://api-sire.sunat.gob.pe',
+      client_id: clientId,
+      client_secret: clientSecret,
+      username: ruc + usuario,
+      password: clave
+    });
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+      body
+    });
+    const text = await res.text();
+    let data;
+    try { data = JSON.parse(text); } catch { data = { raw: text }; }
+    if (!res.ok || !data.access_token) {
+      throw new Error(`Token SIRE HTTP ${res.status}: ${data.error_description || data.error || text.slice(0, 180)}`);
+    }
+    return {
+      access_token: data.access_token,
+      expires_at: Date.now() + (Number(data.expires_in) || 3600) * 1000,
+      updated_at: Date.now()
+    };
+  },
+
+  /**
+   * Solicita descarga de propuesta SIRE (RCE compras o RVIE ventas) de un período YYYYMM.
+   * libro: 'rce' | 'rvie'
+   * Devuelve { numTicket }
+   */
+  async sireSolicitarPropuesta({ accessToken, periodo, libro = 'rce' }) {
+    if (!/^\d{6}$/.test(String(periodo))) throw new Error('Período inválido (use YYYYMM)');
+    const base = 'https://api-sire.sunat.gob.pe';
+    const path = libro === 'rvie'
+      ? `/v1/contribuyente/migeigv/libros/rvie/propuesta/web/propuesta/${periodo}/exportapropuesta?codTipoArchivo=0`
+      : `/v1/contribuyente/migeigv/libros/rce/propuesta/web/propuesta/${periodo}/exportacioncomprobantepropuesta?codTipoArchivo=0&codOrigenEnvio=1`;
+    const url = base + path;
+
+    let res;
+    try {
+      res = await fetch(url, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/json'
+        }
+      });
+    } catch (e) {
+      throw new Error(
+        'No se pudo conectar con API SIRE (posible CORS). Usa Edge Function o extensión. Detalle: ' + (e.message || e)
+      );
+    }
+
+    const text = await res.text();
+    let data;
+    try { data = JSON.parse(text); } catch { data = { raw: text }; }
+
+    if (!res.ok) {
+      throw new Error(
+        `SIRE propuesta HTTP ${res.status}: ${data.msg || data.message || data.error || text.slice(0, 220)}`
+      );
+    }
+    const ticket = data.numTicket || data.ticket || data.num_ticket;
+    if (!ticket) throw new Error('SUNAT no devolvió numTicket. Respuesta: ' + text.slice(0, 200));
+    return { numTicket: ticket, raw: data, libro };
+  },
+
+  /** Alias compatibilidad */
+  async sireSolicitarPropuestaRce(opts) {
+    return this.sireSolicitarPropuesta({ ...opts, libro: 'rce' });
+  },
+
+  /**
+   * Consulta estado de un ticket SIRE
+   */
+  async sireConsultarTicket({ accessToken, numTicket }) {
+    const base = 'https://api-sire.sunat.gob.pe';
+    // Endpoint habitual de consulta de ticket
+    const url = `${base}/v1/contribuyente/migeigv/libros/rvierce/gestionprocesos/web/procesos/${encodeURIComponent(numTicket)}`;
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/json'
+      }
+    });
+    const text = await res.text();
+    let data;
+    try { data = JSON.parse(text); } catch { data = { raw: text }; }
+    return { ok: res.ok, status: res.status, data, text };
+  },
+
+  /**
+   * Intenta parsear un TXT/CSV de propuesta RCE de SUNAT a filas simples.
+   * El formato oficial usa | como separador en muchos archivos SIRE.
+   */
+  parsearPropuestaRce(texto) {
+    const lines = String(texto || '').split(/\r?\n/).filter(l => l.trim());
+    const rows = [];
+    for (const line of lines) {
+      // Saltar cabeceras o líneas muy cortas
+      if (line.startsWith('RUC|') || line.startsWith('Período') || line.length < 20) continue;
+      const parts = line.includes('|') ? line.split('|') : line.split('\t');
+      if (parts.length < 8) continue;
+      // Campos típicos (varían según versión del anexo): tipo, serie, numero, fecha, ruc emisor, razon, moneda, total...
+      const tipo = (parts[1] || parts[0] || '').trim();
+      const serie = (parts[2] || '').trim();
+      const numero = (parts[3] || '').trim();
+      const fecha = (parts[4] || parts[5] || '').trim();
+      const rucEmisor = (parts[6] || parts[5] || '').trim();
+      const razon = (parts[7] || parts[6] || '').trim();
+      const total = (parts[parts.length - 2] || parts[parts.length - 1] || '').trim();
+      if (!serie && !numero) continue;
+      rows.push({
+        tipo,
+        tipoNombre: this.TIPO_DOC[tipo] || tipo,
+        serie,
+        numero,
+        fecha,
+        rucEmisor,
+        razonSocial: razon,
+        monto: total,
+        estado: 'PROPUESTA SIRE',
+        ok: true,
+        mensaje: 'Comprobante en propuesta de compras SIRE',
+        detalle: {
+          'Tipo': this.TIPO_DOC[tipo] || tipo,
+          'Serie-Número': `${serie}-${numero}`,
+          'Fecha': fecha || '—',
+          'RUC Emisor': rucEmisor || '—',
+          'Razón social': razon || '—',
+          'Monto': total || '—',
+          'Origen': 'Propuesta RCE (SIRE)'
+        },
+        raw: { line }
+      });
+    }
+    return rows;
   }
 };
 
