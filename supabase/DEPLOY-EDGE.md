@@ -1,52 +1,60 @@
-# Desplegar Edge Function `obtener-token`
+# Desplegar Edge Functions
 
-Con esta función, **Clave SOL y Client Secret** se usan solo en el servidor de Supabase.
+Project ref: `psfqhpxyidvhgozlptdd`
 
-Tu project ref: `psfqhpxyidvhgozlptdd`
+## Funciones
 
-## Opción A — CLI (recomendada)
+| Función | Uso |
+|---------|-----|
+| `obtener-token` | Token GRE/CPE emisión, consulta validez, y SIRE (`tipo: sire`) |
+| `sire-propuesta` | Descarga propuesta RCE (compras) / RVIE (ventas) en el servidor |
 
-En la PC (PowerShell o Terminal), en la carpeta del proyecto:
+## CLI (recomendada)
 
 ```bash
-# 1. Node.js instalado (https://nodejs.org)
-
-# 2. Login
+# Login y vincular (una vez)
 npx supabase login
-
-# 3. Vincular proyecto (te pide el access token del dashboard)
 npx supabase link --project-ref psfqhpxyidvhgozlptdd
 
-# 4. Desplegar la function
+# Desplegar ambas
 npx supabase functions deploy obtener-token
+npx supabase functions deploy sire-propuesta
 ```
 
-Variables: Supabase inyecta solo `SUPABASE_URL`, `SUPABASE_ANON_KEY` y `SUPABASE_SERVICE_ROLE_KEY`. **No hace falta** configurarlas a mano.
+Supabase inyecta `SUPABASE_URL`, `SUPABASE_ANON_KEY` y `SUPABASE_SERVICE_ROLE_KEY`. No hace falta configurarlas a mano.
 
-## Opción B — Desde el panel (si no usas CLI)
+## Body `obtener-token`
 
-1. Supabase → **Edge Functions**
-2. **Create a new function** → nombre: `obtener-token`
-3. Pega el contenido de `supabase/functions/obtener-token/index.ts`
-4. Deploy
+```json
+{ "empresa_id": "uuid", "tipo": "emision" }
+{ "empresa_id": "uuid", "tipo": "consulta" }
+{ "empresa_id": "uuid", "tipo": "sire" }
+```
 
-## Probar
+## Body `sire-propuesta`
 
-1. Entra a la app con Google (sesión activa).
-2. Empresa activa con RUC, Usuario SOL, Clave, Client ID y Secret guardados en Supabase.
-3. **Generar Token** → la app llama a `functions.invoke('obtener-token')`.
-4. Si falla, en **Edge Functions → Logs** verás el error de SUNAT o de permisos.
+```json
+{
+  "empresa_id": "uuid",
+  "periodo": "202608",
+  "libro": "rce"
+}
+```
 
-## Tipos
+- `libro`: `"rce"` (compras / recibidos) o `"rvie"` (ventas / emitidos)
+- Respuesta OK: `{ ok: true, total, items: [...], ticket, periodo, libro }`
+- Si el archivo aún no está listo: HTTP 202 con `ticket` (reintentar en 1–2 min)
 
-| Body | Uso |
-|------|-----|
-| `{ "empresa_id": "...", "tipo": "emision" }` | Token GRE/CPE (password grant) |
-| `{ "empresa_id": "...", "tipo": "consulta" }` | Token validar facturas/boletas |
+## Flujo del usuario
+
+1. Empresa activa con RUC, Usuario SOL, Clave SOL, Client ID/Secret (alcance **MIGE RCE y RVIE – SIRE**).
+2. Menú **SIRE Compras/Ventas** → elige Compras o Ventas + mes.
+3. **Cargar propuesta del mes** → la app llama a `sire-propuesta`.
+4. Tabla con comprobantes → **Ver** en el Visor → **Exportar CSV**.
 
 ## Seguridad
 
-- El JWT del usuario es obligatorio.
+- JWT del usuario obligatorio.
 - Solo lee empresas del usuario (RLS).
-- `service_role` solo en el servidor para guardar el token.
+- Clave SOL y Client Secret no salen al navegador en estas llamadas.
 - Nunca pongas `service_role` en el frontend.
