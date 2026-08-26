@@ -96,9 +96,41 @@ const API = {
    * Requiere credenciales de API con alcance de consulta en SOL.
    */
   async obtenerTokenConsulta(empresa) {
+    // 1) Edge Function (secretos no salen del servidor)
+    if (window.USE_SUPABASE && window.DB && empresa.id && !String(empresa.id).startsWith('e')) {
+      try {
+        const c = DB.client();
+        if (c) {
+          const { data, error } = await c.functions.invoke('obtener-token', {
+            body: { empresa_id: empresa.id, tipo: 'consulta' }
+          });
+          if (!error && data && data.access_token) {
+            return {
+              access_token: data.access_token,
+              expires_at: data.expires_at
+                ? new Date(data.expires_at).getTime()
+                : Date.now() + (Number(data.expires_in) || 3600) * 1000,
+              updated_at: Date.now()
+            };
+          }
+          if (data && data.error) {
+            // Si la function existe pero SUNAT falló, no ocultar el error
+            if (!/404|not found|Failed to send|FunctionsHttpError|Function not found/i.test(String(data.error))) {
+              throw new Error(data.error);
+            }
+          }
+        }
+      } catch (ex) {
+        if (ex.message && !/404|not found|Failed to send|FunctionsHttpError|Function not found/i.test(ex.message)) {
+          throw ex;
+        }
+      }
+    }
+
+    // 2) Fallback cliente (menos seguro)
     const { clientId, clientSecret, ambiente } = empresa;
     if (!clientId || !clientSecret) {
-      throw new Error('Faltan Client ID / Client Secret para consulta CPE');
+      throw new Error('Faltan Client ID / Client Secret. Despliega la Edge Function obtener-token para no usar secretos en el navegador.');
     }
     const base = ambiente === 'PRUEBA'
       ? 'https://api-seguridad-test.sunat.gob.pe'
