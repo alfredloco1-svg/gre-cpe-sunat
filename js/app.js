@@ -767,15 +767,54 @@
     const mes = $('#sireMes')?.value;
     if (!anio || !mes) return toast('Selecciona año y mes', 'err');
     const periodo = anio + mes;
+    const libro = (document.querySelector('input[name="sireLibro"]:checked') || {}).value || 'rce';
+    const libroLabel = libro === 'rvie' ? 'Ventas (RVIE)' : 'Compras (RCE)';
 
     const prog = $('#sireProgreso');
     const btn = $('#btnSireDescargar');
     btn.disabled = true;
-    prog.textContent = 'Obteniendo token SIRE...';
+    prog.textContent = `Cargando propuesta ${libroLabel} (servidor)...`;
 
     try {
-      const libro = (document.querySelector('input[name="sireLibro"]:checked') || {}).value || 'rce';
-      const libroLabel = libro === 'rvie' ? 'Ventas (RVIE)' : 'Compras (RCE)';
+      // 1) Preferir Edge Function sire-propuesta (sin CORS, secretos en servidor)
+      let usedEdge = false;
+      if (window.USE_SUPABASE && window.DB && emp.id && !String(emp.id).startsWith('e')) {
+        try {
+          const c = DB.client();
+          if (c) {
+            prog.textContent = `SIRE ${libroLabel}: token + ticket en servidor (puede tardar 1–2 min)...`;
+            const { data, error } = await c.functions.invoke('sire-propuesta', {
+              body: { empresa_id: emp.id, periodo, libro }
+            });
+            if (error && !/404|not found|Function not found|FunctionsHttpError|Failed to send/i.test(String(error.message || error))) {
+              throw new Error(error.message || String(error));
+            }
+            if (data && data.ok && Array.isArray(data.items)) {
+              ultimoLoteSire = data.items;
+              renderTablaSire(ultimoLoteSire);
+              toast(`${libroLabel}: ${data.total} comprobantes`, 'ok');
+              prog.textContent = `Listo · ${data.total} · ticket ${data.ticket || '—'} · período ${periodo}`;
+              usedEdge = true;
+            } else if (data && data.ticket && !data.ok) {
+              toast(data.error || `Ticket ${data.ticket}: archivo aún no listo. Reintenta en 1–2 min.`, 'info');
+              prog.textContent = `Ticket ${data.ticket} · reintenta o revisa SOL → SIRE`;
+              usedEdge = true;
+            } else if (data && data.error && !/404|not found|Function not found/i.test(String(data.error))) {
+              throw new Error(data.error);
+            }
+          }
+        } catch (ex) {
+          if (!/404|not found|Function not found|Failed to send|FunctionsHttpError/i.test(String(ex.message || ex))) {
+            throw ex;
+          }
+          // Function no desplegada → fallback cliente
+        }
+      }
+
+      if (usedEdge) return;
+
+      // 2) Fallback cliente (puede fallar por CORS)
+      prog.textContent = 'Obteniendo token SIRE (cliente)...';
       const tokenObj = await API.obtenerTokenSire(emp);
       prog.textContent = `Solicitando propuesta ${libroLabel} a SUNAT...`;
       const { numTicket } = await API.sireSolicitarPropuesta({
@@ -783,56 +822,11 @@
         periodo,
         libro
       });
-      prog.textContent = `Ticket ${numTicket}. Esperando archivo (puede tardar 10–60 s)...`;
-
-      // Polling simple del ticket (máx ~90 s)
-      let archivoTexto = null;
-      for (let i = 0; i < 18; i++) {
-        await new Promise(r => setTimeout(r, 5000));
-        prog.textContent = `Consultando ticket ${numTicket}… (${(i + 1) * 5}s)`;
-        try {
-          const st = await API.sireConsultarTicket({
-            accessToken: tokenObj.access_token,
-            numTicket
-          });
-          // Si la respuesta trae contenido o URL de archivo, intentar usarlo
-          const d = st.data || {};
-          if (d.archivo || d.contenido || d.file || d.urlArchivo) {
-            archivoTexto = d.archivo || d.contenido || d.file || '';
-            if (d.urlArchivo && !archivoTexto) {
-              const fr = await fetch(d.urlArchivo, {
-                headers: { Authorization: `Bearer ${tokenObj.access_token}` }
-              });
-              archivoTexto = await fr.text();
-            }
-            break;
-          }
-          // Algunos endpoints devuelven el archivo directamente cuando está listo
-          if (st.text && st.text.length > 200 && !st.text.trim().startsWith('{')) {
-            archivoTexto = st.text;
-            break;
-          }
-          if (d.codEstado === '06' || d.estado === 'TERMINADO' || d.desEstado === 'Terminado') {
-            // Ticket listo pero sin cuerpo: avisar al usuario
-            prog.textContent = 'Ticket terminado. Descarga el archivo desde el portal SOL si no aparece aquí.';
-            break;
-          }
-        } catch (_) { /* seguir intentando */ }
-      }
-
-      if (archivoTexto && archivoTexto.length > 50) {
-        ultimoLoteSire = API.parsearPropuestaRce(archivoTexto);
-        renderTablaSire(ultimoLoteSire);
-        toast(`Propuesta cargada: ${ultimoLoteSire.length} comprobantes`, 'ok');
-        prog.textContent = `Listo · ${ultimoLoteSire.length} comprobantes del período ${periodo}`;
-      } else {
-        toast(
-          `Ticket generado: ${numTicket}. El archivo aún no está disponible por CORS o el endpoint de descarga. ` +
-          'Puedes ver el mismo listado en SOL → SIRE → RCE → Propuesta del período.',
-          'info'
-        );
-        prog.textContent = `Ticket ${numTicket} · Revisa en portal SOL o reintenta en unos minutos`;
-      }
+      prog.textContent = `Ticket ${numTicket}. Despliega la Edge Function sire-propuesta para descarga automática.`;
+      toast(
+        `Ticket ${numTicket} generado. Para ver el listado aquí, despliega: npx supabase functions deploy sire-propuesta`,
+        'info'
+      );
     } catch (ex) {
       toast(ex.message || 'Error SIRE', 'err');
       prog.textContent = '';
