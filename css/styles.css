@@ -38,3 +38,146 @@
 .visor-row:last-child { border-bottom: none; }
 .visor-label { color: #64748b; }
 .visor-value { font-weight: 500; text-align: right; max-width: 60%; }
+
+/* Vista previa tipo factura electrónica (estilo SUNAT) */
+.factura-preview {
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  font-size: 0.8125rem;
+  color: #0f172a;
+  box-shadow: 0 1px 3px rgba(0,0,0,.06);
+}
+.factura-preview .fp-header {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 1rem;
+  padding: 1.25rem 1.25rem 1rem;
+  border-bottom: 2px solid #0f172a;
+  background: linear-gradient(180deg, #f8fafc 0%, #fff 100%);
+}
+.factura-preview .fp-emisor h2 {
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0 0 0.25rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.factura-preview .fp-emisor .fp-ruc {
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+.factura-preview .fp-emisor p { margin: 0.1rem 0; color: #475569; font-size: 0.75rem; }
+.factura-preview .fp-doc {
+  border: 2px solid #0f172a;
+  border-radius: 0.375rem;
+  padding: 0.75rem 1rem;
+  text-align: center;
+  min-width: 11rem;
+  background: #fff;
+}
+.factura-preview .fp-doc .fp-doc-tipo {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.factura-preview .fp-doc .fp-doc-ruc {
+  font-size: 0.75rem;
+  margin-top: 0.25rem;
+}
+.factura-preview .fp-doc .fp-doc-serie {
+  font-size: 1.05rem;
+  font-weight: 800;
+  margin-top: 0.35rem;
+  letter-spacing: 0.03em;
+}
+.factura-preview .fp-body { padding: 1rem 1.25rem; }
+.factura-preview .fp-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem 1.5rem;
+  margin-bottom: 1rem;
+}
+.factura-preview .fp-box {
+  border: 1px solid #e2e8f0;
+  border-radius: 0.375rem;
+  padding: 0.65rem 0.75rem;
+  background: #f8fafc;
+}
+.factura-preview .fp-box h3 {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #64748b;
+  margin: 0 0 0.35rem;
+  font-weight: 600;
+}
+.factura-preview .fp-box .fp-name { font-weight: 600; font-size: 0.875rem; }
+.factura-preview .fp-box .fp-meta { color: #475569; font-size: 0.75rem; margin-top: 0.15rem; }
+.factura-preview .fp-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.5rem 0 1rem;
+  font-size: 0.75rem;
+}
+.factura-preview .fp-table th {
+  background: #0f172a;
+  color: #fff;
+  text-align: left;
+  padding: 0.4rem 0.5rem;
+  font-weight: 600;
+}
+.factura-preview .fp-table td {
+  border: 1px solid #e2e8f0;
+  padding: 0.45rem 0.5rem;
+  vertical-align: top;
+}
+.factura-preview .fp-table tr:nth-child(even) td { background: #f8fafc; }
+.factura-preview .fp-totales {
+  display: flex;
+  justify-content: flex-end;
+}
+.factura-preview .fp-totales table {
+  border-collapse: collapse;
+  min-width: 14rem;
+  font-size: 0.8125rem;
+}
+.factura-preview .fp-totales td {
+  padding: 0.25rem 0.5rem;
+}
+.factura-preview .fp-totales td:last-child {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.factura-preview .fp-totales .fp-total-row td {
+  border-top: 2px solid #0f172a;
+  font-weight: 700;
+  font-size: 0.9375rem;
+  padding-top: 0.4rem;
+}
+.factura-preview .fp-footer {
+  border-top: 1px solid #e2e8f0;
+  padding: 0.65rem 1.25rem;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 0.7rem;
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.factura-preview .fp-badge {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: #d1fae5;
+  color: #065f46;
+}
+@media (max-width: 640px) {
+  .factura-preview .fp-header,
+  .factura-preview .fp-grid { grid-template-columns: 1fr; }
+}
