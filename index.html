@@ -92,6 +92,9 @@
       <button data-view="cpe" class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-800 transition">
         <span class="w-5 text-center">🧾</span> Comprobantes CPE
       </button>
+      <button data-view="sire" class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-800 transition">
+        <span class="w-5 text-center">📥</span> SIRE Compras/Ventas
+      </button>
       <button data-view="visor" class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-800 transition">
         <span class="w-5 text-center">🔍</span> Visor / Verificar
       </button>
@@ -215,47 +218,57 @@
       <!-- ========== GRE ========== -->
       <section id="view-gre" class="view hidden">
         <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm mb-4">
-          <h2 class="font-semibold mb-4">Listar Guías de Remisión</h2>
-          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+          <h2 class="font-semibold mb-1">Consulta y validación en lote (GRE)</h2>
+          <p class="text-xs text-slate-500 mb-4">Guías de Remisión Remitente (09) y Transportista (31) · API oficial SUNAT de validez. Rango de números + visualización en tabla y Visor.</p>
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
             <div>
-              <label class="block text-xs font-medium text-slate-600 mb-1">Tipo consulta</label>
-              <select id="greTipoConsulta" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                <option value="emitidas">Emitidas</option>
-                <option value="recibidas">Recibidas</option>
+              <label class="block text-xs font-medium text-slate-600 mb-1">Tipo GRE *</label>
+              <select id="greTipoDoc" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                <option value="09">GRE Remitente (09)</option>
+                <option value="31">GRE Transportista (31)</option>
               </select>
             </div>
             <div>
-              <label class="block text-xs font-medium text-slate-600 mb-1">Tipo GRE</label>
-              <select id="greTipo" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                <option value="remitente">Remitente</option>
-                <option value="transportista">Transportista</option>
-                <option value="evento">Por eventos</option>
-              </select>
+              <label class="block text-xs font-medium text-slate-600 mb-1">RUC Emisor *</label>
+              <input id="greRuc" type="text" maxlength="11" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="20100000000" />
             </div>
             <div>
-              <label class="block text-xs font-medium text-slate-600 mb-1">Desde</label>
-              <input type="date" id="greDesde" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+              <label class="block text-xs font-medium text-slate-600 mb-1">Serie *</label>
+              <input id="greSerie" type="text" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="T001 / EG01" />
             </div>
             <div>
-              <label class="block text-xs font-medium text-slate-600 mb-1">Hasta</label>
-              <input type="date" id="greHasta" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+              <label class="block text-xs font-medium text-slate-600 mb-1">Número desde *</label>
+              <input id="greNumDesde" type="number" min="1" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="1" />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1">Número hasta *</label>
+              <input id="greNumHasta" type="number" min="1" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="10" />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1">Fecha emisión *</label>
+              <input type="date" id="greFecha" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
             </div>
           </div>
-          <div class="flex flex-wrap gap-2">
-            <button id="btnListarGRE" class="px-4 py-2 rounded-lg bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium">Listar</button>
-            <button id="btnDescargarGRE" class="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium">Descargar XML/PDF</button>
+          <div class="flex flex-wrap gap-2 items-center">
+            <button id="btnListarGRE" class="px-4 py-2 rounded-lg bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium">Validar lote en SUNAT</button>
+            <button id="btnExportarGRE" class="px-4 py-2 rounded-lg border border-slate-300 text-sm hover:bg-slate-50 hidden">Descargar CSV</button>
+            <button id="btnDescargarGRE" class="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium hidden">Descargar XML/PDF</button>
+            <span id="greProgreso" class="text-xs text-slate-500"></span>
           </div>
-          <p class="text-xs text-amber-600 mt-3">Nota: La API oficial de SUNAT está orientada a emisión. El listado masivo completo suele requerir acceso al portal SOL (se implementará de forma progresiva).</p>
+          <p class="text-[11px] text-amber-700 mt-3 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+            La API oficial de SUNAT no ofrece listado por fechas; solo validación individual/lote por serie-número.
+            Usa el RUC de la empresa activa (o el emisor si son recibidas). Máximo 50 por lote. Requiere Client ID/Secret con alcance de consulta.
+          </p>
         </div>
         <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <div class="overflow-x-auto">
             <table class="w-full text-sm">
               <thead class="bg-slate-50 border-b">
                 <tr>
-                  <th class="px-3 py-2 text-left">Serie</th>
-                  <th class="px-3 py-2 text-left">Número</th>
+                  <th class="px-3 py-2 text-left">Tipo</th>
+                  <th class="px-3 py-2 text-left">Serie-Número</th>
                   <th class="px-3 py-2 text-left">Fecha</th>
-                  <th class="px-3 py-2 text-left">Destinatario</th>
+                  <th class="px-3 py-2 text-left">RUC Emisor</th>
                   <th class="px-3 py-2 text-left">Estado</th>
                   <th class="px-3 py-2 text-right">Ver</th>
                 </tr>
@@ -263,7 +276,7 @@
               <tbody id="tablaGRE"></tbody>
             </table>
           </div>
-          <div id="emptyGRE" class="p-8 text-center text-slate-500 text-sm">Sin resultados. Ejecuta Listar con una empresa y token válidos.</div>
+          <div id="emptyGRE" class="p-8 text-center text-slate-500 text-sm">Sin resultados. Completa el formulario y pulsa Validar lote.</div>
         </div>
       </section>
 
@@ -271,10 +284,10 @@
       <section id="view-cpe" class="view hidden">
         <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm mb-4">
           <h2 class="font-semibold mb-1">Consulta y validación en lote (CPE)</h2>
-          <p class="text-xs text-slate-500 mb-4">Facturas, boletas, notas de crédito/débito · API oficial SUNAT de validez. Descarga resultados en CSV.</p>
+          <p class="text-xs text-slate-500 mb-4">Facturas, boletas, notas de crédito/débito · API oficial SUNAT de validez. Consulta masiva por rango de números + CSV + Visor.</p>
           <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
             <div>
-              <label class="block text-xs font-medium text-slate-600 mb-1">Tipo documento</label>
+              <label class="block text-xs font-medium text-slate-600 mb-1">Tipo documento *</label>
               <select id="cpeDoc" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
                 <option value="01">Factura (01)</option>
                 <option value="03">Boleta (03)</option>
@@ -314,7 +327,7 @@
           </div>
           <p class="text-[11px] text-amber-700 mt-3 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
             Requiere empresa activa y Client ID/Secret con alcance de <strong>consulta de comprobantes</strong> en SOL.
-            Si el navegador bloquea SUNAT (CORS), hará falta Edge Function.
+            Máximo 50 comprobantes por lote. Si el navegador bloquea SUNAT (CORS), usa la Edge Function <code>obtener-token</code>.
           </p>
         </div>
         <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -334,6 +347,84 @@
             </table>
           </div>
           <div id="emptyCPE" class="p-8 text-center text-slate-500 text-sm">Sin resultados. Completa el formulario y pulsa Validar lote.</div>
+        </div>
+      </section>
+
+      <!-- ========== SIRE COMPRAS / VENTAS ========== -->
+      <section id="view-sire" class="view hidden">
+        <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm mb-4">
+          <h2 class="font-semibold mb-1">SIRE · Compras y Ventas</h2>
+          <p class="text-xs text-slate-500 mb-4">
+            Propuesta oficial de <strong>compras (RCE)</strong> y <strong>ventas (RVIE)</strong> por período.
+            El token se genera solo. Ideal para el contador: listado + vista previa + CSV.
+          </p>
+          <div class="flex flex-wrap gap-2 mb-4">
+            <label class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 cursor-pointer hover:bg-slate-50">
+              <input type="radio" name="sireLibro" value="rce" checked class="accent-indigo-600" />
+              <span class="text-sm font-medium">Compras (RCE) · recibidos</span>
+            </label>
+            <label class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 cursor-pointer hover:bg-slate-50">
+              <input type="radio" name="sireLibro" value="rvie" class="accent-indigo-600" />
+              <span class="text-sm font-medium">Ventas (RVIE) · emitidos</span>
+            </label>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1">Año *</label>
+              <select id="sireAnio" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"></select>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1">Mes *</label>
+              <select id="sireMes" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                <option value="01">Enero</option>
+                <option value="02">Febrero</option>
+                <option value="03">Marzo</option>
+                <option value="04">Abril</option>
+                <option value="05">Mayo</option>
+                <option value="06">Junio</option>
+                <option value="07">Julio</option>
+                <option value="08">Agosto</option>
+                <option value="09">Septiembre</option>
+                <option value="10">Octubre</option>
+                <option value="11">Noviembre</option>
+                <option value="12">Diciembre</option>
+              </select>
+            </div>
+            <div class="flex items-end">
+              <button id="btnSireDescargar" class="w-full px-4 py-2 rounded-lg bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium">
+                Cargar propuesta del mes
+              </button>
+            </div>
+          </div>
+          <div class="flex flex-wrap gap-2 items-center">
+            <button id="btnExportarSire" class="px-4 py-2 rounded-lg border border-slate-300 text-sm hover:bg-slate-50 hidden">Exportar CSV</button>
+            <span id="sireProgreso" class="text-xs text-slate-500"></span>
+          </div>
+          <p class="text-[11px] text-amber-700 mt-3 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+            Solo necesitas empresa activa con SOL + Client ID/Secret (alcance <strong>MIGE RCE y RVIE – SIRE</strong>).
+            El token se genera automáticamente. Si hay bloqueo CORS, despliega la Edge Function <code>obtener-token</code>.
+          </p>
+        </div>
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead class="bg-slate-50 border-b">
+                <tr>
+                  <th class="px-3 py-2 text-left">Tipo</th>
+                  <th class="px-3 py-2 text-left">Serie-Número</th>
+                  <th class="px-3 py-2 text-left">Fecha</th>
+                  <th class="px-3 py-2 text-left">RUC Emisor</th>
+                  <th class="px-3 py-2 text-left">Razón social</th>
+                  <th class="px-3 py-2 text-left">Monto</th>
+                  <th class="px-3 py-2 text-right">Ver</th>
+                </tr>
+              </thead>
+              <tbody id="tablaSire"></tbody>
+            </table>
+          </div>
+          <div id="emptySire" class="p-8 text-center text-slate-500 text-sm">
+            Elige año y mes y pulsa <strong>Descargar propuesta del mes</strong> para ver los comprobantes que te emitieron.
+          </div>
         </div>
       </section>
 
