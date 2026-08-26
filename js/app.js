@@ -360,17 +360,25 @@
     const serie = $('#visorSerie').value.trim();
     const numero = $('#visorNumero').value.trim();
     const fecha = $('#visorFecha').value;
-    if (!ruc || !serie || !numero) {
-      toast('Completa RUC, Serie y Número', 'err');
+    const monto = $('#visorMonto')?.value;
+    if (!ruc || !serie || !numero || !fecha) {
+      toast('Completa RUC, Serie, Número y Fecha', 'err');
+      return;
+    }
+    const emp = await Storage.getActiva();
+    if (!emp) {
+      toast('Activa una empresa primero', 'err');
       return;
     }
     const cont = $('#visorContenido');
-    cont.innerHTML = '<div class="text-center text-slate-500 py-16">Consultando...</div>';
+    cont.innerHTML = '<div class="text-center text-slate-500 py-16">Consultando SUNAT...</div>';
     try {
-      const data = await API.consultarComprobante({ tipo, ruc, serie, numero, fecha });
+      const data = await API.consultarComprobante({ tipo, ruc, serie, numero, fecha, monto, empresa: emp });
       renderVisor(data);
+      toast(data.estado || 'Consulta OK', data.ok ? 'ok' : 'info');
     } catch (err) {
-      cont.innerHTML = `<div class="text-center text-red-600 py-16">${escapeHtml(err.message)}</div>`;
+      cont.innerHTML = `<div class="text-center text-red-600 py-16 px-4 text-sm">${escapeHtml(err.message)}</div>`;
+      toast(err.message || 'Error', 'err');
     }
   });
 
@@ -379,22 +387,125 @@
     const rows = Object.entries(data.detalle || {})
       .map(([k, v]) => `<div class="visor-row"><span class="visor-label">${escapeHtml(k)}</span><span class="visor-value">${escapeHtml(String(v))}</span></div>`)
       .join('');
+    const badge = data.ok
+      ? 'bg-emerald-100 text-emerald-800'
+      : (data.estado === 'ERROR' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800');
     cont.innerHTML = `
       <div class="visor-card mb-4">
         <div class="flex items-start justify-between mb-3">
           <div>
-            <div class="text-xs text-slate-500 uppercase tracking-wide">Comprobante</div>
-            <div class="font-semibold text-lg">${escapeHtml(data.serie)}-${escapeHtml(data.numero)}</div>
+            <div class="text-xs text-slate-500 uppercase tracking-wide">${escapeHtml(data.tipoNombre || 'Comprobante')}</div>
+            <div class="font-semibold text-lg">${escapeHtml(data.serie)}-${escapeHtml(String(data.numero))}</div>
           </div>
-          <span class="text-xs px-2.5 py-1 rounded-full bg-amber-100 text-amber-800">${escapeHtml(data.estado)}</span>
+          <span class="text-xs px-2.5 py-1 rounded-full ${badge}">${escapeHtml(String(data.estado || ''))}</span>
         </div>
         ${rows}
       </div>
       <p class="text-sm text-slate-600">${escapeHtml(data.mensaje || '')}</p>
-      <p class="text-xs text-slate-400 mt-4">Vista lista para consulta en línea a SUNAT en el siguiente paso.</p>`;
-    $('#btnVisorXML')?.classList.remove('hidden');
-    $('#btnVisorPDF')?.classList.remove('hidden');
+      <p class="text-xs text-slate-400 mt-4">Consulta de validez vía API SUNAT. La descarga del XML original del emisor puede requerir servicio adicional o archivo propio.</p>`;
+    $('#btnVisorXML')?.classList.add('hidden');
+    $('#btnVisorPDF')?.classList.add('hidden');
   }
+
+  // Resultados CPE en memoria para exportar
+  let ultimoLoteCPE = [];
+
+  function renderTablaCPE(rows) {
+    const tbody = $('#tablaCPE');
+    const empty = $('#emptyCPE');
+    if (!tbody) return;
+    if (!rows.length) {
+      tbody.innerHTML = '';
+      empty?.classList.remove('hidden');
+      $('#btnExportarCPE')?.classList.add('hidden');
+      return;
+    }
+    empty?.classList.add('hidden');
+    $('#btnExportarCPE')?.classList.remove('hidden');
+    tbody.innerHTML = rows.map((r, idx) => {
+      const badge = r.ok
+        ? 'bg-emerald-100 text-emerald-700'
+        : (r.estado === 'ERROR' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-800');
+      return `<tr class="hover:bg-slate-50">
+        <td class="px-3 py-2">${escapeHtml(r.tipoNombre || r.tipo || '')}</td>
+        <td class="px-3 py-2 font-medium">${escapeHtml(r.serie)}-${escapeHtml(String(r.numero))}</td>
+        <td class="px-3 py-2">${escapeHtml(r.fecha || '—')}</td>
+        <td class="px-3 py-2">${escapeHtml(r.monto || '—')}</td>
+        <td class="px-3 py-2"><span class="text-xs px-2 py-0.5 rounded-full ${badge}">${escapeHtml(String(r.estado || ''))}</span></td>
+        <td class="px-3 py-2 text-right">
+          <button type="button" data-cpe-idx="${idx}" class="btn-ver-cpe text-xs text-primary-600 hover:underline">Ver</button>
+        </td>
+      </tr>`;
+    }).join('');
+    tbody.querySelectorAll('.btn-ver-cpe').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const i = Number(btn.getAttribute('data-cpe-idx'));
+        const row = ultimoLoteCPE[i];
+        if (!row) return;
+        navigate('visor');
+        renderVisor(row);
+      });
+    });
+  }
+
+  $('#btnValidarLoteCPE')?.addEventListener('click', async () => {
+    const emp = await Storage.getActiva();
+    if (!emp) return toast('Activa una empresa primero', 'err');
+
+    const tipo = $('#cpeDoc')?.value || '01';
+    const rucEmisor = $('#cpeRuc')?.value.trim();
+    const serie = $('#cpeSerie')?.value.trim();
+    const n1 = parseInt($('#cpeNumDesde')?.value, 10);
+    const n2 = parseInt($('#cpeNumHasta')?.value, 10);
+    const fecha = $('#cpeFecha')?.value;
+    const monto = $('#cpeMonto')?.value;
+
+    if (!rucEmisor || !/^\d{11}$/.test(rucEmisor)) return toast('RUC emisor inválido', 'err');
+    if (!serie) return toast('Indica la serie', 'err');
+    if (!fecha) return toast('Indica la fecha de emisión', 'err');
+    if (!n1 || !n2 || n2 < n1) return toast('Rango de números inválido', 'err');
+    if (n2 - n1 > 50) return toast('Máximo 50 comprobantes por lote (protección)', 'err');
+
+    const items = [];
+    for (let n = n1; n <= n2; n++) {
+      items.push({ tipo, rucEmisor, serie, numero: n, fecha, monto });
+    }
+
+    const prog = $('#cpeProgreso');
+    const btn = $('#btnValidarLoteCPE');
+    btn.disabled = true;
+    prog.textContent = 'Obteniendo token de consulta...';
+
+    try {
+      const tokenObj = await API.obtenerTokenConsulta(emp);
+      prog.textContent = `0 / ${items.length}`;
+      ultimoLoteCPE = await API.validarCpeLote({
+        empresa: emp,
+        accessToken: tokenObj.access_token,
+        items,
+        onProgress: (done, total) => {
+          prog.textContent = `${done} / ${total}`;
+        }
+      });
+      renderTablaCPE(ultimoLoteCPE);
+      const okCount = ultimoLoteCPE.filter(r => r.ok).length;
+      toast(`Lote listo: ${okCount} OK de ${ultimoLoteCPE.length}`, 'ok');
+      prog.textContent = `Listo · ${okCount}/${ultimoLoteCPE.length} aceptados`;
+    } catch (ex) {
+      toast(ex.message || 'Error en lote', 'err');
+      prog.textContent = '';
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  $('#btnExportarCPE')?.addEventListener('click', () => {
+    if (!ultimoLoteCPE.length) return toast('No hay resultados para exportar', 'err');
+    const csv = API.resultadosACsv(ultimoLoteCPE);
+    const stamp = new Date().toISOString().slice(0, 10);
+    API.descargarTexto(`cpe-validacion-${stamp}.csv`, csv);
+    toast('CSV descargado', 'ok');
+  });
 
   // ---------- Header / Dashboard ----------
   async function updateHeader() {
@@ -440,10 +551,7 @@
     toast('Listado GRE: se conectará en el siguiente paso', 'info');
   });
   $('#btnDescargarGRE')?.addEventListener('click', () => toast('Descarga masiva: próximo paso', 'info'));
-  $('#btnListarCPE')?.addEventListener('click', async () => {
-    if (!(await Storage.getActiva())) return toast('Activa una empresa primero', 'err');
-    toast('Listado CPE: próximo paso', 'info');
-  });
+  // Listar CPE reemplazado por validación en lote (btnValidarLoteCPE)
 
   async function boot() {
     await updateHeader();

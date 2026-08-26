@@ -1,5 +1,14 @@
-// APIs externas: openruc + SUNAT OAuth
+// APIs externas: openruc + SUNAT OAuth + consulta CPE
 const API = {
+  TIPO_DOC: {
+    '01': 'Factura',
+    '03': 'Boleta',
+    '07': 'Nota de crédito',
+    '08': 'Nota de débito',
+    '09': 'GRE Remitente',
+    '31': 'GRE Transportista'
+  },
+
   async consultarRuc(ruc) {
     const url = `https://openruc.com/api/ruc/${ruc}`;
     const res = await fetch(url, { headers: { Accept: 'application/json' } });
@@ -15,12 +24,9 @@ const API = {
   },
 
   /**
-   * Genera token SUNAT.
-   * Preferencia: Edge Function (credenciales no salen del servidor).
-   * Fallback: llamada directa desde el navegador (menos seguro).
+   * Token para emisión GRE/CPE (password grant · clientessol)
    */
   async obtenerToken(empresa) {
-    // 1) Intentar Edge Function (recomendado)
     if (window.USE_SUPABASE && window.DB && empresa.id && !String(empresa.id).startsWith('e')) {
       try {
         const c = DB.client();
@@ -37,23 +43,13 @@ const API = {
               updated_at: Date.now()
             };
           }
-          // Si la function no está desplegada (404), cae al fallback
-          if (error && !/404|not found|FunctionsRelayError/i.test(String(error.message || error))) {
-            throw new Error(data?.error || error.message || 'Error en Edge Function');
-          }
         }
-      } catch (ex) {
-        // Solo re-lanzar si no es "function missing"
-        if (ex.message && !/404|not found|Failed to send|FunctionsHttpError/i.test(ex.message)) {
-          // seguir a fallback solo si parece que no hay function
-        }
-      }
+      } catch (_) { /* fallback */ }
     }
 
-    // 2) Fallback cliente (menos seguro: secretos viajan por el navegador)
     const { ruc, usuario, clave, clientId, clientSecret, ambiente } = empresa;
     if (!ruc || !usuario || !clave || !clientId || !clientSecret) {
-      throw new Error('Faltan credenciales (RUC, Usuario SOL, Clave, Client ID o Secret). Si usas Edge Function, verifica que estén guardadas en Supabase.');
+      throw new Error('Faltan credenciales (RUC, Usuario SOL, Clave, Client ID o Secret).');
     }
     const base = ambiente === 'PRUEBA'
       ? 'https://api-seguridad-test.sunat.gob.pe'
@@ -95,27 +91,267 @@ const API = {
     };
   },
 
-  // Placeholder: consulta individual de comprobante (se ampliará)
-  async consultarComprobante({ tipo, ruc, serie, numero, fecha }) {
-    // Por ahora devolvemos estructura de ejemplo / mock para la vista
-    // En producción se conectará a APIs de consulta CPE / portal
+  /**
+   * Token para consulta de validez de comprobantes (client_credentials · extranet)
+   * Requiere credenciales de API con alcance de consulta en SOL.
+   */
+  async obtenerTokenConsulta(empresa) {
+    const { clientId, clientSecret, ambiente } = empresa;
+    if (!clientId || !clientSecret) {
+      throw new Error('Faltan Client ID / Client Secret para consulta CPE');
+    }
+    const base = ambiente === 'PRUEBA'
+      ? 'https://api-seguridad-test.sunat.gob.pe'
+      : 'https://api-seguridad.sunat.gob.pe';
+    const url = `${base}/v1/clientesextranet/${encodeURIComponent(clientId)}/oauth2/token/`;
+
+    const body = new URLSearchParams({
+      grant_type: 'client_credentials',
+      scope: 'https://api.sunat.gob.pe/v1/contribuyente/contribuyentes',
+      client_id: clientId,
+      client_secret: clientSecret
+    });
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Accept: 'application/json'
+      },
+      body
+    });
+
+    const text = await res.text();
+    let data;
+    try { data = JSON.parse(text); } catch { data = { raw: text }; }
+
+    if (!res.ok) {
+      throw new Error(
+        `Token consulta HTTP ${res.status}: ${data.error_description || data.error || text.slice(0, 180)}. ` +
+        'En SOL crea/activa credenciales con alcance de consulta de comprobantes.'
+      );
+    }
+    if (!data.access_token) throw new Error('No se recibió token de consulta');
+
     return {
-      ok: true,
-      tipo,
-      rucEmisor: ruc,
-      serie,
-      numero,
-      fecha: fecha || new Date().toISOString().slice(0, 10),
-      estado: 'CONSULTA LOCAL (pendiente de API de consulta)',
-      mensaje: 'La vista individual está lista. La consulta real a SUNAT se conectará en el siguiente paso (API consulta CPE / portal).',
-      detalle: {
-        'Tipo documento': tipo,
-        'RUC Emisor': ruc,
-        'Serie': serie,
-        'Número': numero,
-        'Fecha emisión': fecha || '—',
-        'Estado': 'Pendiente de validación en línea'
-      }
+      access_token: data.access_token,
+      expires_at: Date.now() + (Number(data.expires_in) || 3600) * 1000,
+      updated_at: Date.now()
     };
+  },
+
+  _fmtFechaSunat(fecha) {
+    if (!fecha) return '';
+    // YYYY-MM-DD → DD/MM/YYYY
+    if (/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+      const [y, m, d] = fecha.split('-');
+      return `${d}/${m}/${y}`;
+    }
+    return fecha;
+  },
+
+  /**
+   * Consulta oficial de validez de CPE (factura, boleta, NC, ND)
+   * API: POST .../contribuyentes/{rucConsultante}/validarcomprobante
+   */
+  async validarCpe({ empresa, accessToken, tipo, rucEmisor, serie, numero, fecha, monto }) {
+    const rucConsultante = (empresa && empresa.ruc) || rucEmisor;
+    if (!accessToken) throw new Error('Sin token de consulta');
+    if (!rucEmisor || !serie || !numero) throw new Error('RUC emisor, serie y número son obligatorios');
+
+    const base = empresa?.ambiente === 'PRUEBA'
+      ? 'https://api-cpe-test.sunat.gob.pe'
+      : 'https://api.sunat.gob.pe';
+
+    // Endpoint oficial de consulta integrada
+    const url = `${base}/v1/contribuyente/contribuyentes/${encodeURIComponent(rucConsultante)}/validarcomprobante`;
+
+    const payload = {
+      numRuc: String(rucEmisor).trim(),
+      codComp: String(tipo).padStart(2, '0'),
+      numeroSerie: String(serie).trim().toUpperCase(),
+      numero: String(parseInt(String(numero).replace(/\D/g, ''), 10) || numero),
+      fechaEmision: this._fmtFechaSunat(fecha),
+      monto: monto !== undefined && monto !== '' ? String(Number(monto).toFixed(2)) : '0.00'
+    };
+
+    let res;
+    try {
+      res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+    } catch (e) {
+      throw new Error(
+        'No se pudo conectar con SUNAT (posible bloqueo CORS desde el navegador). ' +
+        'Usa un servidor/Edge Function o extensión que permita la llamada. Detalle: ' + (e.message || e)
+      );
+    }
+
+    const text = await res.text();
+    let data;
+    try { data = JSON.parse(text); } catch { data = { raw: text }; }
+
+    const estadoCp = data.estadoCp || data.data?.estadoCp || data.success || null;
+    const estadoRuc = data.estadoRuc || data.data?.estadoRuc || '';
+    const condDomi = data.condDomiRuc || data.data?.condDomiRuc || '';
+    const observaciones = data.observaciones || data.data?.observaciones || [];
+
+    // Códigos típicos estadoCp: 0 no existe, 1 aceptado, 2 anulado, 3 autenticado, etc.
+    const mapEstado = {
+      '0': 'NO EXISTE',
+      '1': 'ACEPTADO',
+      '2': 'ANULADO',
+      '3': 'AUTENTICADO',
+      '4': 'NO AUTORIZADO',
+      true: 'OK',
+      false: 'RECHAZADO'
+    };
+    const estadoTxt = mapEstado[String(estadoCp)] || (res.ok ? 'CONSULTADO' : 'ERROR');
+
+    if (!res.ok && !data.estadoCp && data.estadoCp !== 0) {
+      throw new Error(`SUNAT HTTP ${res.status}: ${data.message || data.error || text.slice(0, 200)}`);
+    }
+
+    return {
+      ok: res.ok || estadoCp === '1' || estadoCp === 1,
+      tipo,
+      tipoNombre: this.TIPO_DOC[tipo] || tipo,
+      rucEmisor,
+      serie: payload.numeroSerie,
+      numero: payload.numero,
+      fecha: fecha || '',
+      monto: payload.monto,
+      estado: estadoTxt,
+      estadoCodigo: estadoCp,
+      estadoRuc,
+      condicionDomicilio: condDomi,
+      observaciones: Array.isArray(observaciones) ? observaciones : [],
+      mensaje: estadoTxt === 'ACEPTADO'
+        ? 'Comprobante encontrado y aceptado en SUNAT.'
+        : `Resultado SUNAT: ${estadoTxt}`,
+      detalle: {
+        'Tipo': this.TIPO_DOC[tipo] || tipo,
+        'RUC Emisor': rucEmisor,
+        'Serie-Número': `${payload.numeroSerie}-${payload.numero}`,
+        'Fecha emisión': payload.fechaEmision || '—',
+        'Monto consultado': payload.monto,
+        'Estado comprobante': estadoTxt,
+        'Estado RUC': estadoRuc || '—',
+        'Condición domicilio': condDomi || '—',
+        'Observaciones': (Array.isArray(observaciones) && observaciones.length)
+          ? observaciones.join('; ')
+          : '—'
+      },
+      raw: data
+    };
+  },
+
+  /**
+   * Validación en lote (secuencial, con pausa corta para no saturar)
+   */
+  async validarCpeLote({ empresa, accessToken, items, onProgress }) {
+    const results = [];
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      try {
+        const r = await this.validarCpe({
+          empresa,
+          accessToken,
+          tipo: it.tipo,
+          rucEmisor: it.rucEmisor,
+          serie: it.serie,
+          numero: it.numero,
+          fecha: it.fecha,
+          monto: it.monto
+        });
+        results.push({ ...r, error: null });
+      } catch (ex) {
+        results.push({
+          ok: false,
+          tipo: it.tipo,
+          tipoNombre: this.TIPO_DOC[it.tipo] || it.tipo,
+          rucEmisor: it.rucEmisor,
+          serie: it.serie,
+          numero: String(it.numero),
+          fecha: it.fecha || '',
+          monto: it.monto || '',
+          estado: 'ERROR',
+          mensaje: ex.message || String(ex),
+          error: ex.message || String(ex),
+          detalle: {}
+        });
+      }
+      if (onProgress) onProgress(i + 1, items.length, results[results.length - 1]);
+      // pausa breve entre llamadas
+      if (i < items.length - 1) await new Promise(r => setTimeout(r, 350));
+    }
+    return results;
+  },
+
+  /** Alias usado por el visor */
+  async consultarComprobante(opts) {
+    const empresa = opts.empresa || await (window.Storage && Storage.getActiva());
+    if (!empresa) throw new Error('Activa una empresa primero');
+
+    let tokenObj = null;
+    try {
+      tokenObj = await this.obtenerTokenConsulta(empresa);
+    } catch (e1) {
+      // Intento con token de emisión guardado (puede no servir para consulta)
+      const stored = window.Storage ? await Storage.getToken() : null;
+      if (stored && stored.access_token && stored.expires_at > Date.now()) {
+        tokenObj = stored;
+      } else {
+        throw e1;
+      }
+    }
+
+    return this.validarCpe({
+      empresa,
+      accessToken: tokenObj.access_token,
+      tipo: opts.tipo,
+      rucEmisor: opts.ruc,
+      serie: opts.serie,
+      numero: opts.numero,
+      fecha: opts.fecha,
+      monto: opts.monto
+    });
+  },
+
+  /** Genera CSV para “descargar” resultados del lote */
+  resultadosACsv(rows) {
+    const headers = ['Tipo', 'RUC Emisor', 'Serie', 'Numero', 'Fecha', 'Monto', 'Estado', 'Mensaje'];
+    const lines = [headers.join(',')];
+    for (const r of rows) {
+      const cells = [
+        r.tipoNombre || r.tipo,
+        r.rucEmisor,
+        r.serie,
+        r.numero,
+        r.fecha,
+        r.monto,
+        r.estado,
+        (r.mensaje || r.error || '').replace(/"/g, '""')
+      ].map(v => `"${v == null ? '' : v}"`);
+      lines.push(cells.join(','));
+    }
+    return lines.join('\n');
+  },
+
+  descargarTexto(filename, content, mime = 'text/csv;charset=utf-8') {
+    const blob = new Blob(['\ufeff' + content], { type: mime });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   }
 };
+
+window.API = API;
