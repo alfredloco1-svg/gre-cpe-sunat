@@ -103,3 +103,16 @@ gre-sunat-web/
 3. Elige la cuenta → vuelve autenticado
 
 > Nota: el callback de OAuth es manejado por Supabase; la app detecta la sesión al recargar.
+
+
+## 7. Seguridad (datos sensibles)
+
+Los secretos SOL / Client Secret / tokens son delicados. Lee **`supabase/SEGURIDAD.md`**.
+
+Checklist mínima:
+1. Ejecuta `supabase/schema.sql` (RLS activo).
+2. Desactiva sign-ups públicos; invita usuarios desde el panel.
+3. Activa Google OAuth.
+4. (Recomendado) Despliega la Edge Function `obtener-token` para que las credenciales no viajen por el navegador al generar token.
+5. Usa solo HTTPS en producción.
+6. Nunca pongas la clave `service_role` en el frontend.

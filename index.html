@@ -22,35 +22,35 @@
 <body class="bg-slate-50 text-slate-800 antialiased">
 
   <!-- LOGIN -->
-  <div id="loginScreen" class="fixed inset-0 z-[100] bg-slate-900 flex items-center justify-center p-4 hidden">
-    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+  <div id="loginScreen" class="fixed inset-0 z-[100] bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-7 border border-amber-100/40">
       <div class="text-center mb-6">
-        <div class="w-12 h-12 rounded-xl bg-primary-600 text-white font-bold text-lg flex items-center justify-center mx-auto mb-3">GS</div>
-        <h1 class="text-xl font-semibold">GRE + CPE SUNAT Pro</h1>
-        <p class="text-sm text-slate-500 mt-1">Inicia sesión con Supabase Auth</p>
+        <img src="assets/logo.png" alt="Logo" class="w-28 h-28 object-contain mx-auto mb-3 drop-shadow-md" />
+        <h1 class="text-xl font-semibold tracking-tight text-slate-900">GRE + CPE SUNAT Pro</h1>
+        <p class="text-sm text-slate-500 mt-1">Acceso seguro · sesión gestionada en Supabase</p>
       </div>
       <form id="formLogin" class="space-y-3">
+        <button type="button" id="btnGoogle" class="w-full py-3 rounded-xl border-2 border-slate-200 text-sm hover:bg-amber-50 hover:border-amber-300 flex items-center justify-center gap-2 font-medium transition shadow-sm">
+          <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+          Continuar con Google
+        </button>
+        <div class="relative my-4">
+          <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-slate-200"></div></div>
+          <div class="relative flex justify-center text-xs"><span class="bg-white px-2 text-slate-400">o con email</span></div>
+        </div>
         <div>
           <label class="block text-xs font-medium text-slate-600 mb-1">Email</label>
-          <input id="loginEmail" type="email" required class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm" placeholder="tu@email.com" />
+          <input id="loginEmail" type="email" required autocomplete="username" class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:ring-2 focus:ring-amber-400/50 focus:border-amber-400 outline-none" placeholder="tu@email.com" />
         </div>
         <div>
           <label class="block text-xs font-medium text-slate-600 mb-1">Contraseña</label>
-          <input id="loginPassword" type="password" required minlength="6" class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm" />
+          <input id="loginPassword" type="password" required minlength="6" autocomplete="current-password" class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:ring-2 focus:ring-amber-400/50 focus:border-amber-400 outline-none" />
         </div>
         <p id="loginError" class="text-xs text-red-600 hidden"></p>
-        <button type="submit" id="btnLogin" class="w-full py-2.5 rounded-lg bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium">Entrar</button>
-        <button type="button" id="btnRegister" class="w-full py-2.5 rounded-lg border border-slate-300 text-sm hover:bg-slate-50">Crear cuenta</button>
-        <div class="relative my-4">
-          <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-slate-200"></div></div>
-          <div class="relative flex justify-center text-xs"><span class="bg-white px-2 text-slate-400">o continúa con</span></div>
-        </div>
-        <button type="button" id="btnGoogle" class="w-full py-2.5 rounded-lg border border-slate-300 text-sm hover:bg-slate-50 flex items-center justify-center gap-2 font-medium">
-          <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
-          Google
-        </button>
+        <button type="submit" id="btnLogin" class="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-sm font-medium transition">Entrar</button>
+        <button type="button" id="btnRegister" class="w-full py-2.5 rounded-xl border border-slate-300 text-sm hover:bg-slate-50 transition">Crear cuenta</button>
       </form>
-      <p class="text-xs text-slate-400 text-center mt-4">O usa modo local (sin cuenta) desde config.js → USE_SUPABASE = false</p>
+      <p class="text-xs text-slate-400 text-center mt-5 leading-relaxed">Solo usuarios invitados desde Supabase.<br>Activa Google OAuth en el panel de Authentication.</p>
     </div>
   </div>
 
@@ -58,7 +58,7 @@
   <!-- SIDEBAR -->
   <aside id="sidebar" class="fixed inset-y-0 left-0 z-40 w-64 bg-slate-900 text-white transform transition-transform duration-200 lg:translate-x-0 -translate-x-full">
     <div class="flex items-center gap-3 px-5 py-5 border-b border-slate-700">
-      <div class="w-9 h-9 rounded-lg bg-primary-600 flex items-center justify-center font-bold text-sm">GS</div>
+      <img src="assets/logo.png" alt="Logo" class="w-10 h-10 object-contain rounded-lg bg-white/95 p-0.5 shadow-sm" />
       <div>
         <div class="font-semibold text-sm leading-tight">GRE + CPE</div>
         <div class="text-xs text-slate-400">SUNAT Pro</div>
@@ -402,7 +402,8 @@
             </div>
             <div>
               <label class="block text-xs font-medium text-slate-600 mb-1">Clave SOL *</label>
-              <input id="empClave" type="password" required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+              <input id="empClave" type="password" autocomplete="new-password" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Solo al crear o cambiar" />
+              <p class="text-[10px] text-slate-400 mt-0.5">En edición: vacío = mantener la clave actual</p>
             </div>
           </div>
           <div>
@@ -411,7 +412,8 @@
           </div>
           <div>
             <label class="block text-xs font-medium text-slate-600 mb-1">Client Secret</label>
-            <input id="empClientSecret" type="password" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+            <input id="empClientSecret" type="password" autocomplete="new-password" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Solo al crear o cambiar" />
+            <p class="text-[10px] text-slate-400 mt-0.5">En edición: vacío = mantener el secret actual</p>
           </div>
           <div class="grid grid-cols-2 gap-3">
             <div>
