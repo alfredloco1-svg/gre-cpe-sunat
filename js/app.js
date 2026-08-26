@@ -52,31 +52,38 @@
   }
 
   // ---------- Auth ----------
-  // Autorización de usuarios se controla en Supabase (invitaciones + sign-ups desactivado).
-  // No se guardan correos en el frontend.
+  // Login obligatorio antes de ver la app. Autorización solo en Supabase.
+
+  function showApp() {
+    document.body.classList.add('is-authenticated');
+    $('#loginScreen')?.classList.add('hidden');
+    $('#btnLogout')?.classList.remove('hidden');
+  }
+
+  function showLogin() {
+    document.body.classList.remove('is-authenticated');
+    $('#loginScreen')?.classList.remove('hidden');
+    $('#btnLogout')?.classList.add('hidden');
+  }
 
   async function checkAuth() {
     if (!window.USE_SUPABASE) {
-      $('#loginScreen')?.classList.add('hidden');
-      $('#btnLogout')?.classList.add('hidden');
+      showApp();
       return true;
     }
     initSupabase();
     if (!window.SUPABASE_URL || window.SUPABASE_URL.includes('TU_PROJECT')) {
-      // Config pendiente: modo local
       window.USE_SUPABASE = false;
-      $('#loginScreen')?.classList.add('hidden');
+      showApp();
       toast('Configura js/config.js con tu proyecto Supabase (modo local activo)', 'info');
       return true;
     }
     const user = await DB.getUser();
     if (user) {
-      $('#loginScreen')?.classList.add('hidden');
-      $('#btnLogout')?.classList.remove('hidden');
+      showApp();
       return true;
     }
-    $('#loginScreen')?.classList.remove('hidden');
-    $('#btnLogout')?.classList.add('hidden');
+    showLogin();
     return false;
   }
 
@@ -88,8 +95,7 @@
     err.classList.add('hidden');
     try {
       await DB.signIn(email, pass);
-      $('#loginScreen').classList.add('hidden');
-      $('#btnLogout')?.classList.remove('hidden');
+      showApp();
       await boot();
       toast('Sesión iniciada', 'ok');
     } catch (ex) {
