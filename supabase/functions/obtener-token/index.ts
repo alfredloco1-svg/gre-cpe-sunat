@@ -1,24 +1,30 @@
-// Edge Function: genera el token SUNAT en el servidor.
-// Así Client Secret y Clave SOL NUNCA salen de nuevo al navegador.
+// Edge Function: genera el token SUNAT en el SERVIDOR.
+// Client Secret y Clave SOL NO viajan de nuevo al navegador en esta llamada.
 //
-// Deploy:
-//   supabase functions deploy obtener-token --no-verify-jwt=false
+// Deploy (CLI):
+//   npx supabase login
+//   npx supabase link --project-ref psfqhpxyidvhgozlptdd
+//   npx supabase functions deploy obtener-token
 //
-// Llamada desde el cliente (con sesión del usuario):
-//   const { data, error } = await supabase.functions.invoke('obtener-token', {
-//     body: { empresa_id: 'uuid-de-la-empresa' }
-//   })
+// Body JSON:
+//   { "empresa_id": "uuid", "tipo": "emision" | "consulta" }
+//   tipo por defecto = "emision"
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
+  }
+
+  if (req.method !== 'POST') {
+    return json({ error: 'Método no permitido' }, 405)
   }
 
   try {
@@ -31,7 +37,7 @@ Deno.serve(async (req) => {
     const supabaseAnon = Deno.env.get('SUPABASE_ANON_KEY')!
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
-    // Cliente con el JWT del usuario (respeta RLS)
+    // Cliente con JWT del usuario → RLS aplica
     const userClient = createClient(supabaseUrl, supabaseAnon, {
       global: { headers: { Authorization: authHeader } },
     })
@@ -41,12 +47,20 @@ Deno.serve(async (req) => {
       return json({ error: 'Sesión inválida' }, 401)
     }
 
-    const { empresa_id } = await req.json()
+    let body: { empresa_id?: string; tipo?: string }
+    try {
+      body = await req.json()
+    } catch {
+      return json({ error: 'JSON inválido' }, 400)
+    }
+
+    const empresa_id = body.empresa_id
+    const tipo = (body.tipo || 'emision').toLowerCase() // emision | consulta
+
     if (!empresa_id) {
       return json({ error: 'empresa_id requerido' }, 400)
     }
 
-    // Leer credenciales de la empresa del usuario (RLS)
     const { data: emp, error: empErr } = await userClient
       .from('empresas')
       .select('id, ruc, usuario_sol, clave_sol, client_id, client_secret, ambiente')
@@ -57,32 +71,50 @@ Deno.serve(async (req) => {
       return json({ error: 'Empresa no encontrada o sin permiso' }, 404)
     }
 
-    if (!emp.client_id || !emp.client_secret || !emp.clave_sol || !emp.usuario_sol) {
-      return json({ error: 'Faltan credenciales SOL / API en la empresa' }, 400)
+    if (!emp.client_id || !emp.client_secret) {
+      return json({ error: 'Faltan Client ID / Client Secret en la empresa' }, 400)
     }
 
-    const base = emp.ambiente === 'PRUEBA'
+    const isPrueba = emp.ambiente === 'PRUEBA'
+    const baseSeguridad = isPrueba
       ? 'https://api-seguridad-test.sunat.gob.pe'
       : 'https://api-seguridad.sunat.gob.pe'
 
-    const url = `${base}/v1/clientessol/${encodeURIComponent(emp.client_id)}/oauth2/token/`
+    let tokenUrl: string
+    let form: URLSearchParams
 
-    const body = new URLSearchParams({
-      grant_type: 'password',
-      scope: 'https://api-cpe.sunat.gob.pe',
-      client_id: emp.client_id,
-      client_secret: emp.client_secret,
-      username: emp.ruc + emp.usuario_sol,
-      password: emp.clave_sol,
-    })
+    if (tipo === 'consulta') {
+      // Token para validar CPE (client_credentials · extranet)
+      tokenUrl = `${baseSeguridad}/v1/clientesextranet/${encodeURIComponent(emp.client_id)}/oauth2/token/`
+      form = new URLSearchParams({
+        grant_type: 'client_credentials',
+        scope: 'https://api.sunat.gob.pe/v1/contribuyente/contribuyentes',
+        client_id: emp.client_id,
+        client_secret: emp.client_secret,
+      })
+    } else {
+      // Token emisión GRE/CPE (password · clientessol)
+      if (!emp.clave_sol || !emp.usuario_sol || !emp.ruc) {
+        return json({ error: 'Faltan RUC / Usuario SOL / Clave SOL' }, 400)
+      }
+      tokenUrl = `${baseSeguridad}/v1/clientessol/${encodeURIComponent(emp.client_id)}/oauth2/token/`
+      form = new URLSearchParams({
+        grant_type: 'password',
+        scope: 'https://api-cpe.sunat.gob.pe',
+        client_id: emp.client_id,
+        client_secret: emp.client_secret,
+        username: emp.ruc + emp.usuario_sol,
+        password: emp.clave_sol,
+      })
+    }
 
-    const sunatRes = await fetch(url, {
+    const sunatRes = await fetch(tokenUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
         Accept: 'application/json',
       },
-      body,
+      body: form,
     })
 
     const text = await sunatRes.text()
@@ -95,35 +127,44 @@ Deno.serve(async (req) => {
 
     if (!sunatRes.ok || !data.access_token) {
       return json({
-        error: `SUNAT: ${data.error_description || data.error || text.slice(0, 200)}`,
+        error: `SUNAT (${tipo}): ${data.error_description || data.error || text.slice(0, 220)}`,
+        status: sunatRes.status,
       }, 502)
     }
 
     const expiresIn = Number(data.expires_in) || 3600
     const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString()
 
-    // Guardar token (service role solo para upsert confiable; user_id del dueño)
-    const admin = createClient(supabaseUrl, serviceKey)
-    const { error: tokErr } = await admin.from('tokens').upsert(
-      {
-        user_id: user.id,
-        empresa_id: emp.id,
-        access_token: data.access_token as string,
-        expires_at: expiresAt,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'empresa_id' },
-    )
-
-    if (tokErr) {
-      return json({ error: 'Token obtenido pero no se pudo guardar: ' + tokErr.message }, 500)
+    // Guardar solo tokens de emisión (consulta es más efímero)
+    if (tipo !== 'consulta') {
+      const admin = createClient(supabaseUrl, serviceKey)
+      const { error: tokErr } = await admin.from('tokens').upsert(
+        {
+          user_id: user.id,
+          empresa_id: emp.id,
+          access_token: data.access_token as string,
+          expires_at: expiresAt,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'empresa_id' },
+      )
+      if (tokErr) {
+        // Token OK aunque no se guarde; avisar
+        return json({
+          access_token: data.access_token,
+          expires_at: expiresAt,
+          expires_in: expiresIn,
+          tipo,
+          warning: 'Token OK pero no se guardó en BD: ' + tokErr.message,
+        })
+      }
     }
 
-    // No devolver el access_token completo si no hace falta; aquí sí porque la app lo usa
     return json({
       access_token: data.access_token,
       expires_at: expiresAt,
       expires_in: expiresIn,
+      tipo,
     })
   } catch (e) {
     return json({ error: (e as Error).message || 'Error interno' }, 500)
