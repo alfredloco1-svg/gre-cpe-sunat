@@ -18,11 +18,23 @@
       }
     }
   </script>
+  <style>
+    /* Hasta autenticar: solo se ve el login, la app queda bloqueada */
+    body:not(.is-authenticated) #sidebar,
+    body:not(.is-authenticated) #overlay,
+    body:not(.is-authenticated) #appMain {
+      visibility: hidden !important;
+      pointer-events: none !important;
+    }
+    body.is-authenticated #loginScreen {
+      display: none !important;
+    }
+  </style>
 </head>
 <body class="bg-slate-50 text-slate-800 antialiased">
 
   <!-- LOGIN -->
-  <div id="loginScreen" class="fixed inset-0 z-[100] bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 flex items-center justify-center p-4 hidden">
+  <div id="loginScreen" class="fixed inset-0 z-[100] bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 flex items-center justify-center p-4">
     <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-7 border border-amber-100/40">
       <div class="text-center mb-6">
         <img src="assets/logo.png" alt="Logo" class="w-28 h-28 object-contain mx-auto mb-3 drop-shadow-md" />
@@ -93,7 +105,7 @@
   <div id="overlay" class="fixed inset-0 bg-black/40 z-30 hidden lg:hidden"></div>
 
   <!-- MAIN -->
-  <div class="lg:pl-64 min-h-screen">
+  <div id="appMain" class="lg:pl-64 min-h-screen">
     <!-- Top bar -->
     <header class="sticky top-0 z-20 bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between">
       <div class="flex items-center gap-3">
