@@ -416,7 +416,7 @@
             </div>
           </div>
           <div class="flex flex-wrap gap-2 items-center">
-            <button id="btnExportarSire" class="px-4 py-2 rounded-lg border border-slate-300 text-sm hover:bg-slate-50 hidden">Exportar CSV</button>
+            <button id="btnExportarSire" class="px-4 py-2 rounded-lg border border-slate-300 text-sm hover:bg-slate-50 hidden">Exportar CSV (todo)</button>
             <span id="sireProgreso" class="text-xs text-slate-500"></span>
           </div>
           <p class="text-[11px] text-amber-700 mt-3 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
@@ -424,7 +424,20 @@
             El token se genera automáticamente. Si hay bloqueo CORS, despliega la Edge Function <code>obtener-token</code>.
           </p>
         </div>
-        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div id="emptySire" class="bg-white rounded-xl border border-slate-200 shadow-sm p-8 text-center text-slate-500 text-sm mb-4">
+          Elige año y mes y pulsa <strong>Cargar propuesta del mes</strong> para ver compras y ventas.
+        </div>
+
+        <!-- Compras (RCE) -->
+        <div id="panelSireCompras" class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden mb-4 hidden">
+          <div class="flex items-center justify-between gap-2 px-4 py-3 border-b bg-violet-50">
+            <div class="flex items-center gap-2">
+              <span class="text-[11px] font-semibold px-2 py-0.5 rounded bg-violet-100 text-violet-800">Compras</span>
+              <h3 class="text-sm font-semibold text-slate-800">Propuesta RCE · recibidos</h3>
+              <span id="sireCountCompras" class="text-xs text-slate-500"></span>
+            </div>
+            <button type="button" id="btnExportarSireCompras" class="text-xs px-3 py-1.5 rounded-md border border-slate-300 hover:bg-white">CSV Compras</button>
+          </div>
           <div class="overflow-x-auto">
             <table class="w-full text-sm">
               <thead class="bg-slate-50 border-b">
@@ -432,18 +445,45 @@
                   <th class="px-3 py-2 text-left">Tipo</th>
                   <th class="px-3 py-2 text-left">Serie-Número</th>
                   <th class="px-3 py-2 text-left">Fecha</th>
-                  <th class="px-3 py-2 text-left" id="thSireRuc">RUC Contraparte</th>
-                  <th class="px-3 py-2 text-left" id="thSireRazon">Contraparte</th>
+                  <th class="px-3 py-2 text-left">RUC Emisor</th>
+                  <th class="px-3 py-2 text-left">Proveedor</th>
                   <th class="px-3 py-2 text-left">Monto</th>
                   <th class="px-3 py-2 text-right">Ver</th>
                 </tr>
               </thead>
-              <tbody id="tablaSire"></tbody>
+              <tbody id="tablaSireCompras"></tbody>
             </table>
           </div>
-          <div id="emptySire" class="p-8 text-center text-slate-500 text-sm">
-            Elige año y mes y pulsa <strong>Descargar propuesta del mes</strong> para ver los comprobantes que te emitieron.
+          <div id="emptySireCompras" class="p-6 text-center text-slate-400 text-sm hidden">Sin compras en este período.</div>
+        </div>
+
+        <!-- Ventas (RVIE) -->
+        <div id="panelSireVentas" class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden mb-4 hidden">
+          <div class="flex items-center justify-between gap-2 px-4 py-3 border-b bg-sky-50">
+            <div class="flex items-center gap-2">
+              <span class="text-[11px] font-semibold px-2 py-0.5 rounded bg-sky-100 text-sky-800">Ventas</span>
+              <h3 class="text-sm font-semibold text-slate-800">Propuesta RVIE · emitidos</h3>
+              <span id="sireCountVentas" class="text-xs text-slate-500"></span>
+            </div>
+            <button type="button" id="btnExportarSireVentas" class="text-xs px-3 py-1.5 rounded-md border border-slate-300 hover:bg-white">CSV Ventas</button>
           </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead class="bg-slate-50 border-b">
+                <tr>
+                  <th class="px-3 py-2 text-left">Tipo</th>
+                  <th class="px-3 py-2 text-left">Serie-Número</th>
+                  <th class="px-3 py-2 text-left">Fecha</th>
+                  <th class="px-3 py-2 text-left">RUC Receptor</th>
+                  <th class="px-3 py-2 text-left">Cliente</th>
+                  <th class="px-3 py-2 text-left">Monto</th>
+                  <th class="px-3 py-2 text-right">Ver</th>
+                </tr>
+              </thead>
+              <tbody id="tablaSireVentas"></tbody>
+            </table>
+          </div>
+          <div id="emptySireVentas" class="p-6 text-center text-slate-400 text-sm hidden">Sin ventas en este período.</div>
         </div>
       </section>
 
