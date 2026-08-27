@@ -771,53 +771,82 @@
   }
 
   function renderTablaSire(rows) {
-    const tbody = $('#tablaSire');
+    const all = Array.isArray(rows) ? rows : [];
+    const compras = all.filter((r) => r.libro === 'rce' || /RCE/i.test(String(r.origen || r.estado || '')));
+    const ventas = all.filter((r) => r.libro === 'rvie' || /RVIE/i.test(String(r.origen || r.estado || '')));
+    // filas sin libro: si hay solo uno de los dos modos, no forzamos; residual a ninguno
     const empty = $('#emptySire');
-    if (!tbody) return;
-    if (!rows.length) {
-      tbody.innerHTML = '';
+    const panelC = $('#panelSireCompras');
+    const panelV = $('#panelSireVentas');
+
+    if (!all.length) {
       empty?.classList.remove('hidden');
+      panelC?.classList.add('hidden');
+      panelV?.classList.add('hidden');
       $('#btnExportarSire')?.classList.add('hidden');
       return;
     }
     empty?.classList.add('hidden');
     $('#btnExportarSire')?.classList.remove('hidden');
 
-    const hayVentas = rows.some((r) => r.libro === 'rvie' || /RVIE/i.test(String(r.origen || '')));
-    const hayCompras = rows.some((r) => r.libro === 'rce' || /RCE/i.test(String(r.origen || '')));
-    if ($('#thSireRuc')) {
-      if (hayVentas && !hayCompras) $('#thSireRuc').textContent = 'RUC Receptor';
-      else if (hayCompras && !hayVentas) $('#thSireRuc').textContent = 'RUC Emisor';
-      else $('#thSireRuc').textContent = 'RUC Contraparte';
-    }
-    if ($('#thSireRazon')) {
-      if (hayVentas && !hayCompras) $('#thSireRazon').textContent = 'Receptor (cliente)';
-      else if (hayCompras && !hayVentas) $('#thSireRazon').textContent = 'Emisor (proveedor)';
-      else $('#thSireRazon').textContent = 'Contraparte';
-    }
-
-    tbody.innerHTML = rows.map((r, idx) => {
-      const esVenta = r.libro === 'rvie' || /RVIE/i.test(String(r.origen || ''));
-      const tag = esVenta
-        ? '<span class="text-[10px] px-1.5 py-0.5 rounded bg-sky-100 text-sky-800 mr-1">Venta</span>'
-        : '<span class="text-[10px] px-1.5 py-0.5 rounded bg-violet-100 text-violet-800 mr-1">Compra</span>';
+    const rowHtml = (r, idx, kind) => {
       return `<tr class="hover:bg-slate-50">
-        <td class="px-3 py-2">${tag}${escapeHtml(r.tipoNombre || r.tipo || '')}</td>
+        <td class="px-3 py-2">${escapeHtml(r.tipoNombre || r.tipo || '')}</td>
         <td class="px-3 py-2 font-medium">${escapeHtml(r.serie || '')}-${escapeHtml(String(r.numero || ''))}</td>
         <td class="px-3 py-2">${escapeHtml(r.fecha || '—')}</td>
         <td class="px-3 py-2">${escapeHtml(r.rucEmisor || '—')}</td>
-        <td class="px-3 py-2 max-w-[180px] truncate" title="${escapeHtml(r.razonSocial || '')}">${escapeHtml(r.razonSocial || '—')}</td>
+        <td class="px-3 py-2 max-w-[200px] truncate" title="${escapeHtml(r.razonSocial || '')}">${escapeHtml(r.razonSocial || '—')}</td>
         <td class="px-3 py-2">${escapeHtml(r.monto || '—')}</td>
         <td class="px-3 py-2 text-right">
-          <button type="button" data-sire-idx="${idx}" class="btn-ver-sire text-xs text-primary-600 hover:underline">Ver</button>
+          <button type="button" data-sire-kind="${kind}" data-sire-idx="${idx}" class="btn-ver-sire text-xs text-primary-600 hover:underline">Ver</button>
         </td>
       </tr>`;
-    }).join('');
+    };
 
-    tbody.querySelectorAll('.btn-ver-sire').forEach((btn) => {
+    // Compras
+    if (panelC) {
+      if (compras.length) {
+        panelC.classList.remove('hidden');
+        $('#emptySireCompras')?.classList.add('hidden');
+        const tb = $('#tablaSireCompras');
+        if (tb) tb.innerHTML = compras.map((r, i) => rowHtml(r, i, 'c')).join('');
+        if ($('#sireCountCompras')) $('#sireCountCompras').textContent = `· ${compras.length}`;
+      } else {
+        panelC.classList.remove('hidden');
+        const tb = $('#tablaSireCompras');
+        if (tb) tb.innerHTML = '';
+        $('#emptySireCompras')?.classList.remove('hidden');
+        if ($('#sireCountCompras')) $('#sireCountCompras').textContent = '· 0';
+      }
+    }
+
+    // Ventas
+    if (panelV) {
+      if (ventas.length) {
+        panelV.classList.remove('hidden');
+        $('#emptySireVentas')?.classList.add('hidden');
+        const tb = $('#tablaSireVentas');
+        if (tb) tb.innerHTML = ventas.map((r, i) => rowHtml(r, i, 'v')).join('');
+        if ($('#sireCountVentas')) $('#sireCountVentas').textContent = `· ${ventas.length}`;
+      } else {
+        panelV.classList.remove('hidden');
+        const tb = $('#tablaSireVentas');
+        if (tb) tb.innerHTML = '';
+        $('#emptySireVentas')?.classList.remove('hidden');
+        if ($('#sireCountVentas')) $('#sireCountVentas').textContent = '· 0';
+      }
+    }
+
+    // Guardar índices por lista para Ver
+    window.__sireCompras = compras;
+    window.__sireVentas = ventas;
+
+    document.querySelectorAll('.btn-ver-sire').forEach((btn) => {
       btn.addEventListener('click', () => {
+        const kind = btn.getAttribute('data-sire-kind');
         const i = Number(btn.getAttribute('data-sire-idx'));
-        const row = ultimoLoteSire[i];
+        const list = kind === 'v' ? (window.__sireVentas || []) : (window.__sireCompras || []);
+        const row = list[i];
         if (!row) return;
         navigate('visor');
         void renderVisor(row);
@@ -914,6 +943,22 @@
     } finally {
       btn.disabled = false;
     }
+  });
+
+
+  $('#btnExportarSireCompras')?.addEventListener('click', () => {
+    const rows = window.__sireCompras || [];
+    if (!rows.length) return toast('No hay compras para exportar', 'err');
+    const csv = API.resultadosACsv(rows);
+    API.descargarTexto(`sire-compras-${new Date().toISOString().slice(0, 10)}.csv`, csv);
+    toast('CSV compras descargado', 'ok');
+  });
+  $('#btnExportarSireVentas')?.addEventListener('click', () => {
+    const rows = window.__sireVentas || [];
+    if (!rows.length) return toast('No hay ventas para exportar', 'err');
+    const csv = API.resultadosACsv(rows);
+    API.descargarTexto(`sire-ventas-${new Date().toISOString().slice(0, 10)}.csv`, csv);
+    toast('CSV ventas descargado', 'ok');
   });
 
   $('#btnExportarSire')?.addEventListener('click', () => {
